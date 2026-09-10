@@ -256,9 +256,7 @@ function VoiceAgentInner() {
                 ⚠️ PREVIEW MODE - API KEY HARDCODED
               </p>
               <p className="text-xs text-red-700 leading-relaxed">
-                This is a preview build with a hardcoded API key for testing. 
-                <strong> Do not deploy this to production.</strong> For production use, 
-                remove the hardcoded key and use environment variables instead.
+                This is a preview build with a hardcoded API key for testing.
               </p>
             </div>
           </div>
