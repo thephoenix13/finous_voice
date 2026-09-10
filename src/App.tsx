@@ -1,18 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff, ArrowLeft, Volume2, MessageCircle, Info, Loader2, AlertCircle, Send } from 'lucide-react';
-
-// ═══════════════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════════════
-
-type AgentState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'error';
-
-interface Message {
-  id: string;
-  role: 'user' | 'agent';
-  text: string;
-  timestamp: Date;
-}
+import {
+  AgentProvider,
+  useAgentState,
+  useAgentConversation,
+  useAgentMode,
+  useAgentMicrophone,
+  useAgentPlayer,
+} from '@deepgram/react';
+import {
+  Mic,
+  MicOff,
+  ArrowLeft,
+  Volume2,
+  MessageCircle,
+  Info,
+  Loader2,
+  AlertCircle,
+  Send,
+  PhoneOff,
+  Wifi,
+  WifiOff,
+} from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT & COMPLIANCE
@@ -46,195 +54,180 @@ Tone:
 - Never sound like a salesperson. Sound like a helpful teacher.`;
 
 // ═══════════════════════════════════════════════════════════════════
+// AGENT CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════
+
+const AGENT_CONFIG: any = {
+  auth: {
+    tokenFactory: async (): Promise<string> => {
+      const res = await fetch('/api/token');
+      if (!res.ok) throw new Error('Failed to get token');
+      const data = await res.json();
+      return data.token;
+    },
+  },
+  agent: {
+    listen: {
+      provider: {
+        type: 'deepgram',
+        model: 'nova-3',
+        version: 'v1',
+        language: 'en',
+      },
+    },
+    think: {
+      provider: {
+        type: 'open_ai',
+        model: 'gpt-4o-mini',
+      },
+      prompt: SYSTEM_PROMPT,
+    },
+    speak: {
+      provider: {
+        type: 'deepgram',
+        model: 'aura-2-thalia-en',
+        version: 'v1',
+      },
+    },
+    greeting: "Hello! I'm Finous, your financial literacy assistant. Ask me anything about personal finance or tax concepts, and I'll explain them in plain English.",
+  },
+  audio: {
+    input: {
+      encoding: 'linear16',
+      sampleRate: 16000,
+    },
+    output: {
+      encoding: 'linear16',
+      sampleRate: 24000,
+    },
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════
 // SUGGESTED QUESTIONS
 // ═══════════════════════════════════════════════════════════════════
 
 const SUGGESTED_QUESTIONS = [
-  "What is compound interest?",
-  "Explain tax brackets",
-  "What is an ETF?",
-  "How does a mortgage work?",
-  "Difference between deduction and credit?",
-  "What is the 50-30-20 rule?",
-  "What is a credit score?",
-  "How does diversification work?",
-  "What is dollar-cost averaging?",
-  "Explain capital gains tax",
+  'What is compound interest?',
+  'Explain tax brackets',
+  'What is an ETF?',
+  'How does a mortgage work?',
+  'Difference between deduction and credit?',
+  'What is the 50-30-20 rule?',
+  'What is a credit score?',
+  'How does diversification work?',
+  'What is dollar-cost averaging?',
+  'Explain capital gains tax',
 ];
 
 // ═══════════════════════════════════════════════════════════════════
-// DEMO RESPONSES (for when Deepgram API is not configured)
+// VOICE AGENT INNER COMPONENT (uses hooks inside provider)
 // ═══════════════════════════════════════════════════════════════════
 
-const DEMO_RESPONSES: Record<string, string> = {
-  "what is compound interest": "Compound interest is when you earn interest not just on your original money, but also on the interest you've already earned. It's like interest on interest — your money grows faster over time. Albert Einstein reportedly called it the eighth wonder of the world. This is general information, not financial or tax advice.",
-  "explain tax brackets": "Tax brackets are ranges of income that are taxed at different rates. In many countries, as you earn more, each additional dollar falls into a higher bracket and is taxed at a higher rate. Importantly, only the income within each bracket is taxed at that rate — your entire income isn't taxed at the highest rate. This is general information, not financial or tax advice.",
-  "what is an etf": "An ETF, or Exchange-Traded Fund, is a basket of investments — like stocks or bonds — that trades on a stock exchange like a single stock. It gives you instant diversification because you own a small piece of many assets at once. ETFs typically have lower fees than actively managed funds. This is general information, not financial or tax advice.",
-  "how does a mortgage work": "A mortgage is a loan specifically for buying property. The property itself serves as collateral — if you stop paying, the lender can take it. You make regular payments that cover both the principal (what you borrowed) and interest (the cost of borrowing). Mortgages typically run 15 to 30 years. This is general information, not financial or tax advice.",
-  "difference between deduction and credit": "A tax deduction reduces the amount of income that's taxed, while a tax credit directly reduces the tax you owe dollar-for-dollar. For example, a $1,000 deduction might save you $220 in taxes if you're in the 22% bracket, but a $1,000 credit saves you the full $1,000. Credits are generally more valuable. This is general information, not financial or tax advice.",
-  "what is the 50-30-20 rule": "The 50-30-20 rule is a budgeting framework. You allocate 50% of after-tax income to needs like rent and groceries, 30% to wants like dining out and entertainment, and 20% to savings and debt repayment. It's a simple starting point for managing money. This is general information, not financial or tax advice.",
-  "what is a credit score": "A credit score is a number, typically between 300 and 850, that represents how reliably you've handled borrowed money in the past. Lenders use it to decide whether to lend to you and at what interest rate. It's based on payment history, amounts owed, length of credit history, new credit, and types of credit used. This is general information, not financial or tax advice.",
-  "how does diversification work": "Diversification means spreading your investments across different types of assets — stocks, bonds, real estate, different industries, and geographies. The idea is that when one area underperforms, others may do better, reducing your overall risk. It's often described as 'not putting all your eggs in one basket.' This is general information, not financial or tax advice.",
-  "what is dollar-cost averaging": "Dollar-cost averaging means investing a fixed amount of money at regular intervals, regardless of the price. When prices are low, your fixed amount buys more shares. When prices are high, it buys fewer. Over time, this smooths out the average price you pay and removes the need to time the market. This is general information, not financial or tax advice.",
-  "explain capital gains tax": "Capital gains tax is a tax on the profit you make when you sell an asset for more than you paid for it. Many countries distinguish between short-term gains (held less than a year) and long-term gains (held longer), with long-term gains typically taxed at a lower rate. The tax is only on the gain, not the total sale price. This is general information, not financial or tax advice.",
-};
+function VoiceAgentInner() {
+  const { state, start, stop, isConnected, isConnecting } = useAgentState();
+  const { conversation, sendUserMessage } = useAgentConversation();
+  const { mode, isSpeaking, isListening } = useAgentMode();
+  const { micActive, micMuted, setMicMuted } = useAgentMicrophone();
+  const { outputMuted, setOutputMuted } = useAgentPlayer();
 
-function getDemoResponse(input: string): string {
-  const lower = input.toLowerCase().trim();
-  
-  // Check for exact or close matches
-  for (const [key, response] of Object.entries(DEMO_RESPONSES)) {
-    if (lower.includes(key) || key.includes(lower)) {
-      return response;
-    }
-  }
-  
-  // Check for recommendation requests
-  if (lower.includes('recommend') || lower.includes('should i') || lower.includes('what should') || lower.includes('which one')) {
-    return "I can explain how this works, but I can't recommend what you should do. For that, please consult a qualified financial or tax advisor. This is general information, not financial or tax advice.";
-  }
-  
-  // Check for personal data requests
-  if (lower.includes('my salary') || lower.includes('my income') || lower.includes('my account') || lower.includes('calculate my')) {
-    return "I appreciate you sharing, but I'm not able to process personal financial information or perform calculations for your specific situation. I can explain how concepts work in general terms. This is general information, not financial or tax advice.";
-  }
-  
-  // Default response
-  return "That's a great question! I'm here to help explain financial concepts in plain English. Could you try asking about a specific topic like compound interest, tax brackets, ETFs, or budgeting? This is general information, not financial or tax advice.";
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// MAIN APP COMPONENT
-// ═══════════════════════════════════════════════════════════════════
-
-export default function App() {
-  const [agentState, setAgentState] = useState<AgentState>('idle');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [currentTranscript, setCurrentTranscript] = useState('');
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
-  const [tokenReady, setTokenReady] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  
+  const [hasStarted, setHasStarted] = useState(false);
+  const [volumeLevel, setVolumeLevel] = useState(0);
+
   const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const textInputRef = useRef<HTMLInputElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number>(0);
 
   // Auto-scroll transcript
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, currentTranscript]);
+  }, [conversation]);
 
-  // Fetch token on mount (simulated for demo)
+  // Volume meter animation
   useEffect(() => {
-    const fetchToken = async () => {
+    if (hasStarted && micActive) {
+      const animate = () => {
+        // We'll use a simple visual pulse instead of actual volume
+        setVolumeLevel(Math.random() * 0.5 + 0.3);
+        animFrameRef.current = requestAnimationFrame(animate);
+      };
+      animFrameRef.current = requestAnimationFrame(animate);
+      return () => cancelAnimationFrame(animFrameRef.current);
+    }
+  }, [hasStarted, micActive]);
+
+  // Determine UI state
+  const getAgentState = (): 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'error' => {
+    if (!hasStarted) return 'idle';
+    if (isConnecting) return 'connecting';
+    if (state === 'disconnected') return 'error';
+    if (isSpeaking) return 'speaking';
+    if (isListening) return 'listening';
+    if (state === 'connected') return 'listening';
+    return 'idle';
+  };
+
+  const agentState = getAgentState();
+
+  // Handle mic button tap
+  const handleMicTap = useCallback(async () => {
+    if (!hasStarted) {
+      // First tap — start the session
       try {
-        // In production, this calls /api/token which returns a Deepgram temp token
-        // For demo, we simulate the token fetch
-        const response = await fetch('/api/token').catch(() => null);
-        if (response && response.ok) {
-          const data = await response.json();
-          if (data.token) {
-            setTokenReady(true);
-            setIsConnected(true);
-            return;
-          }
-        }
-      } catch {
-        // No server available — demo mode
+        await start();
+        setHasStarted(true);
+      } catch (err) {
+        console.error('Failed to start agent:', err);
+        // Show helpful error message
+        alert(
+          'Unable to connect to the voice agent. Please ensure:\n\n' +
+          '1. DEEPGRAM_API_KEY is set in Vercel environment variables\n' +
+          '2. OpenAI API key is configured in your Deepgram Console\n' +
+          '3. You have granted microphone permission\n\n' +
+          'Error: ' + (err instanceof Error ? err.message : 'Unknown error')
+        );
       }
-      // Demo mode — token "ready" for UI purposes
-      setTimeout(() => {
-        setTokenReady(true);
-        setIsConnected(true);
-      }, 800);
-    };
-    fetchToken();
-  }, []);
-
-  // Add message helper
-  const addMessage = useCallback((role: 'user' | 'agent', text: string) => {
-    setMessages(prev => [...prev, {
-      id: Date.now().toString() + Math.random().toString(36).slice(2),
-      role,
-      text,
-      timestamp: new Date(),
-    }]);
-  }, []);
-
-  // Handle user question
-  const handleQuestion = useCallback(async (question: string) => {
-    if (!question.trim()) return;
-    
-    addMessage('user', question);
-    setCurrentTranscript('');
-    setAgentState('thinking');
-    
-    // Simulate LLM processing time
-    await new Promise(resolve => setTimeout(resolve, 1200 + Math.random() * 800));
-    
-    const response = getDemoResponse(question);
-    setAgentState('speaking');
-    
-    // Simulate TTS playback time
-    await new Promise(resolve => setTimeout(resolve, Math.min(response.length * 30, 4000)));
-    
-    addMessage('agent', response);
-    setAgentState('idle');
-  }, [addMessage]);
-
-  // Mic button handler
-  const handleMicTap = useCallback(() => {
-    if (agentState === 'listening') {
-      // Stop listening
-      setAgentState('idle');
-      return;
-    }
-    
-    if (agentState === 'error') {
-      setAgentState('idle');
-      setErrorMsg('');
-      return;
-    }
-    
-    if (agentState !== 'idle') return;
-    
-    // Request mic permission and start listening
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(() => {
-          setAgentState('listening');
-          // In production: connect WebSocket to Deepgram
-          // For demo: simulate listening then auto-stop after timeout
-          setTimeout(() => {
-            setAgentState(prev => prev === 'listening' ? 'idle' : prev);
-          }, 15000);
-        })
-        .catch(() => {
-          setShowTextInput(true);
-          setErrorMsg('Microphone access denied. Please type your question instead.');
-          setAgentState('error');
-        });
+    } else if (isConnected) {
+      // Already connected — toggle mute
+      setMicMuted(!micMuted);
     } else {
-      setShowTextInput(true);
+      // Reconnect
+      try {
+        await start();
+      } catch (err) {
+        console.error('Failed to reconnect:', err);
+        alert('Failed to reconnect. Please check your connection and try again.');
+      }
     }
-  }, [agentState]);
+  }, [hasStarted, isConnected, micMuted, start, setMicMuted]);
 
-  // Text input submit
-  const handleTextSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    if (textInput.trim()) {
-      handleQuestion(textInput);
-      setTextInput('');
-    }
-  }, [textInput, handleQuestion]);
+  // Handle text input
+  const handleTextSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (textInput.trim() && isConnected) {
+        sendUserMessage(textInput);
+        setTextInput('');
+      }
+    },
+    [textInput, isConnected, sendUserMessage]
+  );
 
-  // Suggested question click
-  const handleSuggestedClick = useCallback((question: string) => {
-    handleQuestion(question);
-  }, [handleQuestion]);
+  // Handle suggested question
+  const handleSuggestedClick = useCallback(
+    async (question: string) => {
+      if (!hasStarted) {
+        await start();
+        setHasStarted(true);
+        // Small delay to let connection establish
+        setTimeout(() => sendUserMessage(question), 500);
+      } else if (isConnected) {
+        sendUserMessage(question);
+      }
+    },
+    [hasStarted, isConnected, start, sendUserMessage]
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-bg">
@@ -250,9 +243,7 @@ export default function App() {
               <span className="hidden sm:inline">Back</span>
             </a>
             <div className="h-4 w-px bg-gray-200" />
-            <span className="text-lg font-semibold text-navy tracking-tight">
-              Finous
-            </span>
+            <span className="text-lg font-semibold text-navy tracking-tight">Finous</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-navy/5 text-navy text-xs font-medium">
@@ -265,7 +256,6 @@ export default function App() {
 
       {/* ═══ MAIN CONTENT ═══ */}
       <main className="flex-1 flex flex-col max-w-[900px] mx-auto w-full px-4">
-        
         {/* Hero Section */}
         <section className="pt-6 pb-4 sm:pt-10 sm:pb-6 text-center">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-navy leading-tight">
@@ -279,52 +269,56 @@ export default function App() {
 
         {/* ═══ VOICE INTERFACE ═══ */}
         <section className="flex flex-col items-center py-4 sm:py-6 relative">
-          {/* Subtle background glow behind mic */}
+          {/* Subtle background glow */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] rounded-full bg-gradient-to-br from-gold/[0.04] to-transparent pointer-events-none" />
-          
+
           {/* Mic Button */}
           <div className="relative">
             {/* Pulse rings for listening state */}
-            {agentState === 'listening' && (
+            {(agentState === 'listening' || agentState === 'speaking') && (
               <>
-                <div className="absolute inset-0 rounded-full bg-gold/20 animate-pulse-ring" style={{ margin: '-12px' }} />
-                <div className="absolute inset-0 rounded-full bg-gold/10 animate-pulse-ring" style={{ margin: '-24px', animationDelay: '0.5s' }} />
+                <div
+                  className="absolute inset-0 rounded-full bg-gold/20 animate-pulse-ring"
+                  style={{ margin: '-12px' }}
+                />
+                <div
+                  className="absolute inset-0 rounded-full bg-gold/10 animate-pulse-ring"
+                  style={{ margin: '-24px', animationDelay: '0.5s' }}
+                />
               </>
             )}
-            
+
             {/* Main Button */}
             <button
               onClick={handleMicTap}
-              disabled={!tokenReady || (agentState !== 'idle' && agentState !== 'listening' && agentState !== 'error')}
               className={`
                 relative z-10 w-[140px] h-[140px] sm:w-[180px] sm:h-[180px] rounded-full
                 flex items-center justify-center
                 transition-all duration-300 ease-out
                 focus:outline-none focus:ring-4 focus:ring-gold/30
                 ${agentState === 'idle' ? 'bg-gradient-to-br from-gold to-gold-dark hover:scale-105 mic-glow cursor-pointer' : ''}
-                ${agentState === 'listening' ? 'bg-gradient-to-br from-gold to-gold-dark mic-glow-active animate-pulse-dot' : ''}
+                ${agentState === 'listening' ? 'bg-gradient-to-br from-gold to-gold-dark mic-glow-active animate-pulse-dot cursor-pointer' : ''}
                 ${agentState === 'thinking' ? 'bg-navy cursor-wait' : ''}
                 ${agentState === 'speaking' ? 'bg-gradient-to-br from-navy to-navy-light' : ''}
                 ${agentState === 'connecting' ? 'bg-navy/80 cursor-wait' : ''}
                 ${agentState === 'error' ? 'bg-gradient-to-br from-red-500 to-red-700 cursor-pointer' : ''}
-                ${!tokenReady ? 'bg-gray-300 cursor-not-allowed' : ''}
               `}
               aria-label={
-                agentState === 'idle' ? 'Tap to speak' :
-                agentState === 'listening' ? 'Listening — tap to stop' :
-                agentState === 'thinking' ? 'Processing your question' :
-                agentState === 'speaking' ? 'Finous is speaking' :
-                agentState === 'error' ? 'Error — tap to retry' :
-                'Connecting...'
+                agentState === 'idle'
+                  ? 'Tap to start voice conversation'
+                  : agentState === 'listening'
+                  ? 'Listening — tap to mute'
+                  : agentState === 'speaking'
+                  ? 'Finous is speaking'
+                  : agentState === 'error'
+                  ? 'Error — tap to retry'
+                  : 'Connecting...'
               }
             >
-              {/* Button content based on state */}
-              {agentState === 'idle' && (
-                <Mic size={48} className="text-white sm:w-14 sm:h-14" />
-              )}
+              {agentState === 'idle' && <Mic size={48} className="text-white sm:w-14 sm:h-14" />}
               {agentState === 'listening' && (
                 <div className="flex items-center gap-1.5">
-                  {[0, 1, 2, 3, 4].map(i => (
+                  {[0, 1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
                       className="w-1.5 bg-white rounded-full animate-waveform"
@@ -333,12 +327,10 @@ export default function App() {
                   ))}
                 </div>
               )}
-              {agentState === 'thinking' && (
-                <Loader2 size={40} className="text-white animate-spin-slow" />
-              )}
+              {agentState === 'thinking' && <Loader2 size={40} className="text-white animate-spin-slow" />}
               {agentState === 'speaking' && (
                 <div className="flex items-center gap-1.5">
-                  {[0, 1, 2, 3, 4, 5, 6].map(i => (
+                  {[0, 1, 2, 3, 4, 5, 6].map((i) => (
                     <div
                       key={i}
                       className="w-1 bg-gold rounded-full animate-waveform"
@@ -347,35 +339,72 @@ export default function App() {
                   ))}
                 </div>
               )}
-              {agentState === 'connecting' && (
-                <Loader2 size={40} className="text-white animate-spin-slow" />
-              )}
-              {agentState === 'error' && (
-                <MicOff size={40} className="text-white" />
-              )}
-              {!tokenReady && (
-                <Loader2 size={40} className="text-gray-500 animate-spin-slow" />
-              )}
+              {agentState === 'connecting' && <Loader2 size={40} className="text-white animate-spin-slow" />}
+              {agentState === 'error' && <MicOff size={40} className="text-white" />}
             </button>
           </div>
 
           {/* State Label */}
           <div className="mt-4 text-center">
-            <p className={`text-sm font-medium ${
-              agentState === 'error' ? 'text-error' : 'text-text-muted'
-            }`}>
+            <p className={`text-sm font-medium ${agentState === 'error' ? 'text-error' : 'text-text-muted'}`}>
               {agentState === 'idle' && 'Tap to speak'}
-              {agentState === 'listening' && 'Listening...'}
+              {agentState === 'listening' && (micMuted ? 'Muted — tap to unmute' : 'Listening...')}
               {agentState === 'thinking' && 'Thinking...'}
               {agentState === 'speaking' && 'Finous is speaking...'}
               {agentState === 'connecting' && 'Connecting...'}
-              {agentState === 'error' && (errorMsg || 'Something went wrong. Tap to retry.')}
+              {agentState === 'error' && 'Connection lost. Tap to retry.'}
             </p>
             {/* Connection status */}
-            <p className="text-xs text-text-muted/60 mt-1">
-              {isConnected ? '● Connected' : '○ Connecting...'}
+            <p className="text-xs text-text-muted/60 mt-1 flex items-center justify-center gap-1">
+              {isConnected ? (
+                <>
+                  <Wifi size={10} className="text-success" /> Connected
+                </>
+              ) : hasStarted ? (
+                <>
+                  <WifiOff size={10} className="text-error" /> Disconnected
+                </>
+              ) : (
+                <>
+                  <Wifi size={10} /> Ready
+                </>
+              )}
             </p>
           </div>
+
+          {/* Control buttons */}
+          {hasStarted && isConnected && (
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                onClick={() => setMicMuted(!micMuted)}
+                className={`p-2.5 rounded-full transition-all ${
+                  micMuted ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-text-muted hover:bg-gray-200'
+                }`}
+                title={micMuted ? 'Unmute mic' : 'Mute mic'}
+              >
+                {micMuted ? <MicOff size={16} /> : <Mic size={16} />}
+              </button>
+              <button
+                onClick={() => setOutputMuted(!outputMuted)}
+                className={`p-2.5 rounded-full transition-all ${
+                  outputMuted ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-text-muted hover:bg-gray-200'
+                }`}
+                title={outputMuted ? 'Unmute speaker' : 'Mute speaker'}
+              >
+                <Volume2 size={16} />
+              </button>
+              <button
+                onClick={() => {
+                  stop();
+                  setHasStarted(false);
+                }}
+                className="p-2.5 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-all"
+                title="End conversation"
+              >
+                <PhoneOff size={16} />
+              </button>
+            </div>
+          )}
         </section>
 
         {/* ═══ TEXT INPUT FALLBACK ═══ */}
@@ -389,30 +418,34 @@ export default function App() {
               {showTextInput ? 'Hide text input' : 'Or type your question'}
             </button>
           </div>
-          
+
           {showTextInput && (
             <form onSubmit={handleTextSubmit} className="animate-fade-in max-w-lg mx-auto">
               <div className="flex gap-2">
                 <input
-                  ref={textInputRef}
                   type="text"
                   value={textInput}
-                  onChange={e => setTextInput(e.target.value)}
+                  onChange={(e) => setTextInput(e.target.value)}
                   placeholder="Type a question about finance or tax..."
                   className="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm
                     focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold
                     placeholder:text-text-muted/50 transition-all"
-                  disabled={agentState === 'thinking' || agentState === 'speaking'}
+                  disabled={!isConnected}
                 />
                 <button
                   type="submit"
-                  disabled={!textInput.trim() || agentState === 'thinking' || agentState === 'speaking'}
+                  disabled={!textInput.trim() || !isConnected}
                   className="px-4 py-3 rounded-xl bg-navy text-white text-sm font-medium
                     hover:bg-navy-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Send size={16} />
                 </button>
               </div>
+              {!isConnected && (
+                <p className="text-xs text-text-muted mt-2 text-center">
+                  {hasStarted ? 'Connecting... please wait.' : 'Start a voice conversation first, or tap a suggestion below.'}
+                </p>
+              )}
             </form>
           )}
         </section>
@@ -424,10 +457,9 @@ export default function App() {
               <button
                 key={i}
                 onClick={() => handleSuggestedClick(q)}
-                disabled={agentState === 'thinking' || agentState === 'speaking'}
                 className="shrink-0 px-4 py-2 rounded-full border border-gold/30 bg-white
                   text-sm text-navy hover:bg-gold/5 hover:border-gold/50 transition-all
-                  disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  whitespace-nowrap"
               >
                 {q}
               </button>
@@ -436,13 +468,15 @@ export default function App() {
         </section>
 
         {/* ═══ TRANSCRIPT PANEL ═══ */}
-        {messages.length > 0 && (
+        {conversation.length > 0 && (
           <section className="flex-1 pb-4">
             <div className="transcript-scroll overflow-y-auto max-h-[40vh] sm:max-h-[50vh] space-y-3 px-1">
-              {messages.map((msg) => (
+              {conversation.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`animate-fade-in flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`animate-fade-in flex ${
+                    msg.role === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
                 >
                   <div
                     className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
@@ -451,27 +485,17 @@ export default function App() {
                         : 'bg-white border border-gray-100 shadow-sm text-text-dark rounded-bl-md border-l-[3px] border-l-gold'
                     }`}
                   >
-                    <p>{msg.text}</p>
-                    <p className="text-[10px] text-text-muted/50 mt-1.5">
-                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    <p>{msg.content}</p>
                   </div>
                 </div>
               ))}
-              {currentTranscript && (
-                <div className="flex justify-end animate-fade-in">
-                  <div className="max-w-[85%] px-4 py-3 rounded-2xl bg-gray-50 text-text-muted text-sm italic rounded-br-md">
-                    {currentTranscript}...
-                  </div>
-                </div>
-              )}
               <div ref={transcriptEndRef} />
             </div>
           </section>
         )}
 
         {/* ═══ EMPTY STATE ═══ */}
-        {messages.length === 0 && (
+        {conversation.length === 0 && (
           <section className="flex-1 flex flex-col items-center justify-center py-6 text-center animate-slide-up">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-navy/5 to-gold/5 flex items-center justify-center mb-4">
               <Info size={24} className="text-navy/40" />
@@ -528,5 +552,29 @@ export default function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MAIN APP WITH PROVIDER
+// ═══════════════════════════════════════════════════════════════════
+
+export default function App() {
+  return (
+    <AgentProvider
+      config={AGENT_CONFIG}
+      microphone={true}
+      microphoneOptions={{
+        sampleRate: 16000,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      }}
+      tts={true}
+      playerSampleRate={24000}
+      autoStart={false}
+    >
+      <VoiceAgentInner />
+    </AgentProvider>
   );
 }
