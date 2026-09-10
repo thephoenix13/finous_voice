@@ -238,9 +238,9 @@ function VoiceAgentInner() {
   const chips = getChipsForTab();
 
   return (
-    <div className="min-h-screen flex flex-col safe-bottom">
+    <div className="min-h-screen flex flex-col safe-bottom overflow-x-hidden">
       {/* ═══ AMBIENT BACKGROUND ═══ */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
         <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full transition-all duration-1000 ${
           agentState === 'listening' ? 'bg-green-500/10 blur-[120px]' :
           agentState === 'speaking' ? 'bg-amber-500/10 blur-[120px]' :
@@ -528,8 +528,8 @@ function VoiceAgentInner() {
 
         {/* ═══ TRANSCRIPT PANEL ═══ */}
         {conversation.length > 0 && (
-          <section className="flex-1 px-4 pb-4">
-            <div className="transcript-scroll overflow-y-auto max-h-[35vh] sm:max-h-[45vh] space-y-2.5">
+          <section className="px-4 pb-4">
+            <div className="transcript-scroll max-h-[40vh] sm:max-h-[50vh] space-y-2.5 overflow-y-auto">
               {conversation.map((msg) => (
                 <div
                   key={msg.id}
@@ -555,7 +555,7 @@ function VoiceAgentInner() {
 
         {/* ═══ EMPTY STATE ═══ */}
         {conversation.length === 0 && (
-          <section className="flex-1 flex flex-col items-center justify-start px-4 pt-4 pb-4 text-center animate-slide-up">
+          <section className="flex flex-col items-center justify-start px-4 pt-4 pb-4 text-center animate-slide-up">
             {/* Floating icon */}
             <div className="relative mb-4">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-purple-600/10 border border-white/5 flex items-center justify-center animate-float">
