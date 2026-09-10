@@ -21,37 +21,20 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react';
+import { 
+  LEARNING_PATHS, 
+  SCENARIOS, 
+  LIFE_STAGES, 
+  COMPARISONS, 
+  SUGGESTED_QUESTIONS,
+  ENHANCED_SYSTEM_PROMPT 
+} from './data/financialContent';
 
 // ═══════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT & COMPLIANCE
 // ═══════════════════════════════════════════════════════════════════
 
-const SYSTEM_PROMPT = `You are Finous, a financial literacy and tax information assistant for a global audience.
-
-Your role:
-- Explain personal finance and tax concepts in plain English.
-- Help users understand compound interest, ETF, index fund, emergency fund, credit score, APR, mortgage, tax brackets, capital gains, deduction vs credit, withholding, filing status, inflation, diversification, net worth, and similar concepts.
-- Explain how calculations work — but never calculate for a specific user.
-- Explain trade-offs between options — but never recommend one.
-- Explain how tax systems work in general terms across countries — but never give jurisdiction-specific advice for a user's situation.
-
-Compliance rules (non-negotiable):
-- Never give specific investment advice. Never name a specific stock, fund, insurance product, or lender.
-- Never calculate tax liability, mortgage payments, or returns for a specific user.
-- Never ask for or accept personal financial data (salary, investments, loan details, account numbers).
-- Never offer to file a tax return.
-- Never recommend a product, fund, or course of action.
-- Never give jurisdiction-specific tax advice for a specific user's situation.
-- Always end every response with: "This is general information, not financial or tax advice."
-- If a user asks for a recommendation, say: "I can explain how this works, but I can't recommend what you should do. For that, please consult a qualified financial or tax advisor."
-
-Language: Respond in English only.
-
-Tone:
-- Friendly, patient, and clear.
-- Avoid jargon. Explain as if talking to someone new to finance.
-- Keep answers short — 2 to 4 sentences unless the user asks for more detail.
-- Never sound like a salesperson. Sound like a helpful teacher.`;
+const SYSTEM_PROMPT = ENHANCED_SYSTEM_PROMPT;
 
 // ═══════════════════════════════════════════════════════════════════
 // AGENT CONFIGURATION
@@ -99,23 +82,6 @@ const AGENT_CONFIG: any = {
     },
   },
 };
-
-// ═══════════════════════════════════════════════════════════════════
-// SUGGESTED QUESTIONS
-// ═══════════════════════════════════════════════════════════════════
-
-const SUGGESTED_QUESTIONS = [
-  'What is compound interest?',
-  'Explain tax brackets',
-  'What is an ETF?',
-  'How does a mortgage work?',
-  'Difference between deduction and credit?',
-  'What is the 50-30-20 rule?',
-  'What is a credit score?',
-  'How does diversification work?',
-  'What is dollar-cost averaging?',
-  'Explain capital gains tax',
-];
 
 // ═══════════════════════════════════════════════════════════════════
 // VOICE AGENT INNER COMPONENT (uses hooks inside provider)
@@ -463,20 +429,102 @@ function VoiceAgentInner() {
           )}
         </section>
 
-        {/* ═══ SUGGESTED QUESTIONS ═══ */}
+        {/* ═══ SUGGESTED QUESTIONS & FEATURES ═══ */}
         <section className="pb-4">
-          <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
-            {SUGGESTED_QUESTIONS.map((q, i) => (
-              <button
-                key={i}
-                onClick={() => handleSuggestedClick(q)}
-                className="shrink-0 px-4 py-2 rounded-full border border-gold/30 bg-white
-                  text-sm text-navy hover:bg-gold/5 hover:border-gold/50 transition-all
-                  whitespace-nowrap"
-              >
-                {q}
-              </button>
-            ))}
+          {/* Feature Categories */}
+          <div className="mb-4">
+            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2 px-1">
+              🎓 Learning Paths
+            </h3>
+            <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
+              {Object.entries(LEARNING_PATHS).map(([key, path]) => (
+                <button
+                  key={key}
+                  onClick={() => handleSuggestedClick(`Start learning path: ${path.title}`)}
+                  className="shrink-0 px-4 py-2 rounded-full border border-blue-200 bg-blue-50
+                    text-sm text-blue-900 hover:bg-blue-100 hover:border-blue-300 transition-all
+                    whitespace-nowrap"
+                >
+                  📚 {path.title}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2 px-1">
+              🌟 Real-World Scenarios
+            </h3>
+            <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
+              {Object.entries(SCENARIOS).map(([key, scenario]) => (
+                <button
+                  key={key}
+                  onClick={() => handleSuggestedClick(`Walk me through: ${scenario.title}`)}
+                  className="shrink-0 px-4 py-2 rounded-full border border-green-200 bg-green-50
+                    text-sm text-green-900 hover:bg-green-100 hover:border-green-300 transition-all
+                    whitespace-nowrap"
+                >
+                  🚶 {scenario.title}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2 px-1">
+              👤 Life Stage Guides
+            </h3>
+            <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
+              {Object.entries(LIFE_STAGES).map(([key, stage]) => (
+                <button
+                  key={key}
+                  onClick={() => handleSuggestedClick(`What should I learn in ${stage.title}?`)}
+                  className="shrink-0 px-4 py-2 rounded-full border border-purple-200 bg-purple-50
+                    text-sm text-purple-900 hover:bg-purple-100 hover:border-purple-300 transition-all
+                    whitespace-nowrap"
+                >
+                  🎯 {stage.title}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2 px-1">
+              ⚖️ Compare Concepts
+            </h3>
+            <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
+              {Object.entries(COMPARISONS).map(([key, comparison]) => (
+                <button
+                  key={key}
+                  onClick={() => handleSuggestedClick(`Compare: ${comparison.title}`)}
+                  className="shrink-0 px-4 py-2 rounded-full border border-orange-200 bg-orange-50
+                    text-sm text-orange-900 hover:bg-orange-100 hover:border-orange-300 transition-all
+                    whitespace-nowrap"
+                >
+                  🔄 {comparison.title}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-2">
+            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2 px-1">
+              💡 Quick Questions
+            </h3>
+            <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
+              {SUGGESTED_QUESTIONS.slice(0, 10).map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleSuggestedClick(q)}
+                  className="shrink-0 px-4 py-2 rounded-full border border-gold/30 bg-white
+                    text-sm text-navy hover:bg-gold/5 hover:border-gold/50 transition-all
+                    whitespace-nowrap"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -513,21 +561,52 @@ function VoiceAgentInner() {
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-navy/5 to-gold/5 flex items-center justify-center mb-4">
               <Info size={24} className="text-navy/40" />
             </div>
-            <p className="text-sm text-text-muted max-w-xs leading-relaxed">
-              Tap the microphone and ask a question, or choose a topic to get started.
+            <p className="text-sm text-text-muted max-w-xs leading-relaxed mb-4">
+              Tap the microphone and ask a question, or explore our guided features below.
             </p>
-            <div className="grid grid-cols-2 gap-2 mt-5 w-full max-w-sm px-2">
-              {['💰 Compound Interest', '📊 Tax Brackets', '🏦 ETFs', '🏠 Mortgages'].map((topic, i) => (
+            
+            <div className="w-full max-w-2xl px-2 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
                 <button
-                  key={i}
-                  onClick={() => handleSuggestedClick(SUGGESTED_QUESTIONS[i])}
-                  className="px-3 py-2.5 rounded-xl bg-white border border-gray-100 shadow-sm
-                    text-xs text-navy font-medium hover:border-gold/30 hover:shadow-md
+                  onClick={() => handleSuggestedClick('Start learning path: Investing Basics')}
+                  className="px-3 py-3 rounded-xl bg-blue-50 border border-blue-200 shadow-sm
+                    text-xs text-blue-900 font-medium hover:bg-blue-100 hover:border-blue-300
                     transition-all text-left"
                 >
-                  {topic}
+                  📚 Learning Paths
+                  <p className="text-[10px] text-blue-700 mt-1 font-normal">Guided courses</p>
                 </button>
-              ))}
+                <button
+                  onClick={() => handleSuggestedClick('Walk me through: Your First Paycheck')}
+                  className="px-3 py-3 rounded-xl bg-green-50 border border-green-200 shadow-sm
+                    text-xs text-green-900 font-medium hover:bg-green-100 hover:border-green-300
+                    transition-all text-left"
+                >
+                  🚶 Scenarios
+                  <p className="text-[10px] text-green-700 mt-1 font-normal">Real-life walkthroughs</p>
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleSuggestedClick('What should I learn in my 20s?')}
+                  className="px-3 py-3 rounded-xl bg-purple-50 border border-purple-200 shadow-sm
+                    text-xs text-purple-900 font-medium hover:bg-purple-100 hover:border-purple-300
+                    transition-all text-left"
+                >
+                  🎯 Life Stages
+                  <p className="text-[10px] text-purple-700 mt-1 font-normal">Age-specific guides</p>
+                </button>
+                <button
+                  onClick={() => handleSuggestedClick('Compare: ETF vs Mutual Fund')}
+                  className="px-3 py-3 rounded-xl bg-orange-50 border border-orange-200 shadow-sm
+                    text-xs text-orange-900 font-medium hover:bg-orange-100 hover:border-orange-300
+                    transition-all text-left"
+                >
+                  ⚖️ Comparisons
+                  <p className="text-[10px] text-orange-700 mt-1 font-normal">Side-by-side analysis</p>
+                </button>
+              </div>
             </div>
           </section>
         )}
