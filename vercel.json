@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/voice", "destination": "/index.html" },
+    { "source": "/voice/:path*", "destination": "/:path*" }
+  ]
+}
