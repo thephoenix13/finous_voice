@@ -238,7 +238,7 @@ function VoiceAgentInner() {
   const chips = getChipsForTab();
 
   return (
-    <div className="min-h-screen flex flex-col safe-bottom overflow-x-hidden">
+    <div className="safe-bottom overflow-x-hidden">
       {/* ═══ AMBIENT BACKGROUND ═══ */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
         <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full transition-all duration-1000 ${
@@ -308,7 +308,7 @@ function VoiceAgentInner() {
       )}
 
       {/* ═══ MAIN CONTENT ═══ */}
-      <main className="flex-1 flex flex-col max-w-[900px] mx-auto w-full relative z-10">
+      <main className="max-w-[900px] mx-auto w-full relative z-10">
         
         {/* ═══ HERO + ORB SECTION ═══ */}
         <section className="relative px-4 pt-6 pb-4 sm:pt-10 sm:pb-6">
