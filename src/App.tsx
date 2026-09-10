@@ -13,13 +13,19 @@ import {
   ArrowLeft,
   Volume2,
   MessageCircle,
-  Info,
   Loader2,
   AlertCircle,
   Send,
   PhoneOff,
   Wifi,
   WifiOff,
+  X,
+  BookOpen,
+  Map,
+  User,
+  GitCompare,
+  Sparkles,
+  ChevronRight,
 } from 'lucide-react';
 import { 
   LEARNING_PATHS, 
@@ -31,7 +37,7 @@ import {
 } from './data/financialContent';
 
 // ═══════════════════════════════════════════════════════════════════
-// SYSTEM PROMPT & COMPLIANCE
+// SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════════
 
 const SYSTEM_PROMPT = ENHANCED_SYSTEM_PROMPT;
@@ -43,7 +49,6 @@ const SYSTEM_PROMPT = ENHANCED_SYSTEM_PROMPT;
 const AGENT_CONFIG: any = {
   auth: {
     // ⚠️ SECURITY WARNING: This API key is hardcoded for preview only!
-    // In production, use environment variables and the /api/token endpoint
     apiKey: '13f24d75e9b08c53977e73255a4c175f765df2ad',
   },
   agent: {
@@ -84,22 +89,39 @@ const AGENT_CONFIG: any = {
 };
 
 // ═══════════════════════════════════════════════════════════════════
-// VOICE AGENT INNER COMPONENT (uses hooks inside provider)
+// CATEGORY TABS
+// ═══════════════════════════════════════════════════════════════════
+
+type CategoryTab = 'quick' | 'learn' | 'scenarios' | 'stages' | 'compare';
+
+const CATEGORIES: { id: CategoryTab; label: string; icon: any; color: string }[] = [
+  { id: 'quick', label: 'Quick', icon: Sparkles, color: 'gold' },
+  { id: 'learn', label: 'Learn', icon: BookOpen, color: 'blue' },
+  { id: 'scenarios', label: 'Scenarios', icon: Map, color: 'green' },
+  { id: 'stages', label: 'Stages', icon: User, color: 'purple' },
+  { id: 'compare', label: 'Compare', icon: GitCompare, color: 'orange' },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+// VOICE AGENT INNER COMPONENT
 // ═══════════════════════════════════════════════════════════════════
 
 function VoiceAgentInner() {
   const { state, start, stop, isConnected, isConnecting } = useAgentState();
   const { conversation, sendUserMessage } = useAgentConversation();
-  const { mode, isSpeaking, isListening } = useAgentMode();
-  const { micActive, micMuted, setMicMuted } = useAgentMicrophone();
+  const { isSpeaking, isListening } = useAgentMode();
+  const { micMuted, setMicMuted } = useAgentMicrophone();
   const { outputMuted, setOutputMuted } = useAgentPlayer();
 
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  const [activeTab, setActiveTab] = useState<CategoryTab>('quick');
+  const [showBanner, setShowBanner] = useState(true);
+  
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const chipsContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -124,7 +146,6 @@ function VoiceAgentInner() {
     setError(null);
     
     if (!hasStarted) {
-      // First tap — start the session
       try {
         await start();
         setHasStarted(true);
@@ -133,23 +154,20 @@ function VoiceAgentInner() {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
         
         if (errorMessage.includes('token') || errorMessage.includes('Failed to get token')) {
-          setError('Unable to connect. Please ensure DEEPGRAM_API_KEY is set in Vercel environment variables.');
+          setError('Unable to connect. Please ensure DEEPGRAM_API_KEY is set.');
         } else if (errorMessage.includes('microphone') || errorMessage.includes('permission')) {
-          setError('Microphone access denied. Please grant microphone permission and try again.');
+          setError('Microphone access denied. Please grant permission.');
         } else {
           setError(`Connection failed: ${errorMessage}`);
         }
       }
     } else if (isConnected) {
-      // Already connected — toggle mute
       setMicMuted(!micMuted);
     } else {
-      // Reconnect
       try {
         await start();
       } catch (err) {
-        console.error('Failed to reconnect:', err);
-        setError('Failed to reconnect. Please check your connection and try again.');
+        setError('Failed to reconnect. Please try again.');
       }
     }
   }, [hasStarted, isConnected, micMuted, start, setMicMuted]);
@@ -173,10 +191,8 @@ function VoiceAgentInner() {
         try {
           await start();
           setHasStarted(true);
-          // Small delay to let connection establish
           setTimeout(() => sendUserMessage(question), 500);
         } catch (err) {
-          console.error('Failed to start agent:', err);
           setError('Unable to connect. Please ensure API keys are configured.');
         }
       } else if (isConnected) {
@@ -186,79 +202,139 @@ function VoiceAgentInner() {
     [hasStarted, isConnected, start, sendUserMessage]
   );
 
+  // Get chips for active tab
+  type Chip = { text: string; emoji?: string; action: () => void };
+  
+  const getChipsForTab = (): Chip[] => {
+    switch (activeTab) {
+      case 'quick':
+        return SUGGESTED_QUESTIONS.slice(0, 10).map(q => ({ text: q, action: () => handleSuggestedClick(q) }));
+      case 'learn':
+        return Object.entries(LEARNING_PATHS).map(([_, path]) => ({
+          text: path.title,
+          emoji: '📚',
+          action: () => handleSuggestedClick(`Start learning path: ${path.title}`)
+        }));
+      case 'scenarios':
+        return Object.entries(SCENARIOS).map(([_, scenario]) => ({
+          text: scenario.title,
+          emoji: '🚶',
+          action: () => handleSuggestedClick(`Walk me through: ${scenario.title}`)
+        }));
+      case 'stages':
+        return Object.entries(LIFE_STAGES).map(([_, stage]) => ({
+          text: stage.title,
+          emoji: '🎯',
+          action: () => handleSuggestedClick(`What should I learn in ${stage.title}?`)
+        }));
+      case 'compare':
+        return Object.entries(COMPARISONS).map(([_, comparison]) => ({
+          text: comparison.title,
+          emoji: '⚖️',
+          action: () => handleSuggestedClick(`Compare: ${comparison.title}`)
+        }));
+      default:
+        return [];
+    }
+  };
+
+  const chips = getChipsForTab();
+
   return (
-    <div className="min-h-screen flex flex-col bg-bg">
-      {/* ═══ HEADER ═══ */}
-      <header className="sticky top-0 z-50 header-blur bg-white/80 border-b border-gray-100">
-        <div className="max-w-[900px] mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+    <div className="min-h-screen flex flex-col bg-bg safe-bottom">
+      {/* ═══ COMPACT HEADER ═══ */}
+      <header className="sticky top-0 z-50 header-blur bg-white/90 border-b border-gray-100/50 safe-top">
+        <div className="max-w-[900px] mx-auto px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
             <a
               href="https://www.finous.site/"
-              className="flex items-center gap-1.5 text-text-muted hover:text-navy transition-colors text-sm"
+              className="flex items-center gap-1 text-text-muted hover:text-navy transition-colors"
+              aria-label="Back to Finous"
             >
-              <ArrowLeft size={16} />
-              <span className="hidden sm:inline">Back</span>
+              <ArrowLeft size={18} strokeWidth={2.5} />
             </a>
             <div className="h-4 w-px bg-gray-200" />
-            <span className="text-lg font-semibold text-navy tracking-tight">Finous</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center">
+                <span className="text-white text-[10px] font-bold">F</span>
+              </div>
+              <span className="text-base font-semibold text-navy tracking-tight">Finous</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-navy/5 text-navy text-xs font-medium">
-              <Volume2 size={12} />
-              Voice · Info Only
-            </span>
+          
+          {/* Connection indicator */}
+          <div className="flex items-center gap-1.5">
+            {isConnected ? (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-success/10">
+                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span className="text-[10px] font-medium text-success">Live</span>
+              </div>
+            ) : hasStarted ? (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-error/10">
+                <div className="w-1.5 h-1.5 rounded-full bg-error" />
+                <span className="text-[10px] font-medium text-error">Offline</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100">
+                <Wifi size={10} className="text-text-muted" />
+                <span className="text-[10px] font-medium text-text-muted">Ready</span>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      {/* ═══ MAIN CONTENT ═══ */}
-      <main className="flex-1 flex flex-col max-w-[900px] mx-auto w-full px-4">
-        {/* Security Warning Banner */}
-        <section className="pt-4 pb-2">
-          <div className="bg-red-50 border-2 border-red-300 rounded-xl px-4 py-3 flex items-start gap-2.5">
-            <AlertCircle size={20} className="text-red-600 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-red-800 mb-1">
-                ⚠️ PREVIEW MODE - API KEY HARDCODED
-              </p>
-              <p className="text-xs text-red-700 leading-relaxed">
-                This is a preview build with a hardcoded API key for testing.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Hero Section */}
-        <section className="pt-6 pb-4 sm:pt-10 sm:pb-6 text-center">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-navy leading-tight">
-            Ask Finous anything about money.
-          </h1>
-          <p className="mt-2 sm:mt-3 text-text-muted text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
-            Understand personal finance and tax rules in plain English.
-            <br className="hidden sm:block" /> Information, never advice.
+      {/* ═══ SECURITY BANNER (dismissible) ═══ */}
+      {showBanner && (
+        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-amber-800 flex items-center gap-1.5">
+            <AlertCircle size={12} className="shrink-0" />
+            <span>Preview mode with hardcoded API key</span>
           </p>
-        </section>
+          <button 
+            onClick={() => setShowBanner(false)}
+            className="p-1 rounded-full hover:bg-amber-100 transition-colors"
+            aria-label="Dismiss"
+          >
+            <X size={14} className="text-amber-700" />
+          </button>
+        </div>
+      )}
 
-        {/* ═══ VOICE INTERFACE ═══ */}
-        <section className="flex flex-col items-center py-4 sm:py-6 relative">
-          {/* Subtle background glow */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] rounded-full bg-gradient-to-br from-gold/[0.04] to-transparent pointer-events-none" />
+      {/* ═══ MAIN CONTENT ═══ */}
+      <main className="flex-1 flex flex-col max-w-[900px] mx-auto w-full">
+        
+        {/* ═══ HERO + MIC SECTION ═══ */}
+        <section className="relative px-4 pt-4 pb-2 sm:pt-8 sm:pb-4">
+          {/* Background gradient */}
+          <div className="absolute inset-0 bg-gradient-to-b from-gold/[0.03] via-transparent to-transparent pointer-events-none" />
+          
+          {/* Headline - compact on mobile */}
+          <div className="text-center mb-4 sm:mb-6 relative">
+            <h1 className="text-xl sm:text-3xl lg:text-4xl font-bold text-navy leading-tight">
+              Ask Finous anything<br className="sm:hidden" /> about money.
+            </h1>
+            <p className="mt-1.5 sm:mt-2 text-text-muted text-xs sm:text-sm max-w-md mx-auto">
+              Personal finance & tax in plain English. Information, never advice.
+            </p>
+          </div>
 
-          {/* Mic Button */}
-          <div className="relative">
-            {/* Pulse rings for listening state */}
-            {(agentState === 'listening' || agentState === 'speaking') && (
+          {/* ═══ MIC BUTTON - THE HERO ═══ */}
+          <div className="flex flex-col items-center relative">
+            {/* Ripple effects when listening */}
+            {agentState === 'listening' && (
               <>
-                <div
-                  className="absolute inset-0 rounded-full bg-gold/20 animate-pulse-ring"
-                  style={{ margin: '-12px' }}
-                />
-                <div
-                  className="absolute inset-0 rounded-full bg-gold/10 animate-pulse-ring"
-                  style={{ margin: '-24px', animationDelay: '0.5s' }}
-                />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[180px] sm:w-[240px] sm:h-[240px] rounded-full border-2 border-gold/20 animate-ripple" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[180px] sm:w-[240px] sm:h-[240px] rounded-full border-2 border-gold/10 animate-ripple" style={{ animationDelay: '0.5s' }} />
               </>
             )}
+            
+            {/* Ambient glow */}
+            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] sm:w-[280px] sm:h-[280px] rounded-full transition-all duration-500 ${
+              agentState === 'idle' ? 'bg-gold/[0.06]' :
+              agentState === 'listening' ? 'bg-gold/[0.12]' :
+              agentState === 'speaking' ? 'bg-navy/[0.06]' : 'bg-transparent'
+            }`} />
 
             {/* Main Button */}
             <button
@@ -267,46 +343,46 @@ function VoiceAgentInner() {
                 relative z-10 w-[140px] h-[140px] sm:w-[180px] sm:h-[180px] rounded-full
                 flex items-center justify-center
                 transition-all duration-300 ease-out
-                focus:outline-none focus:ring-4 focus:ring-gold/30
-                ${agentState === 'idle' ? 'bg-gradient-to-br from-gold to-gold-dark hover:scale-105 mic-glow cursor-pointer' : ''}
+                focus:outline-none btn-press
+                ${agentState === 'idle' ? 'bg-gradient-to-br from-gold to-gold-dark mic-glow cursor-pointer hover:scale-105' : ''}
                 ${agentState === 'listening' ? 'bg-gradient-to-br from-gold to-gold-dark mic-glow-active animate-pulse-dot cursor-pointer' : ''}
-                ${agentState === 'thinking' ? 'bg-navy cursor-wait' : ''}
+                ${agentState === 'thinking' ? 'bg-gradient-to-br from-navy to-navy-light cursor-wait' : ''}
                 ${agentState === 'speaking' ? 'bg-gradient-to-br from-navy to-navy-light' : ''}
                 ${agentState === 'connecting' ? 'bg-navy/80 cursor-wait' : ''}
                 ${agentState === 'error' ? 'bg-gradient-to-br from-red-500 to-red-700 cursor-pointer' : ''}
               `}
+              style={{ boxShadow: agentState === 'idle' ? undefined : undefined }}
               aria-label={
-                agentState === 'idle'
-                  ? 'Tap to start voice conversation'
-                  : agentState === 'listening'
-                  ? 'Listening — tap to mute'
-                  : agentState === 'speaking'
-                  ? 'Finous is speaking'
-                  : agentState === 'error'
-                  ? 'Error — tap to retry'
-                  : 'Connecting...'
+                agentState === 'idle' ? 'Tap to start' :
+                agentState === 'listening' ? 'Listening' :
+                agentState === 'speaking' ? 'Speaking' :
+                agentState === 'error' ? 'Retry' : 'Connecting'
               }
             >
-              {agentState === 'idle' && <Mic size={48} className="text-white sm:w-14 sm:h-14" />}
+              {agentState === 'idle' && (
+                <div className="flex flex-col items-center gap-1">
+                  <Mic size={44} className="text-white sm:w-14 sm:h-14" strokeWidth={2} />
+                </div>
+              )}
               {agentState === 'listening' && (
                 <div className="flex items-center gap-1.5">
                   {[0, 1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
                       className="w-1.5 bg-white rounded-full animate-waveform"
-                      style={{ animationDelay: `${i * 0.15}s`, height: '8px' }}
+                      style={{ animationDelay: `${i * 0.12}s`, height: '10px' }}
                     />
                   ))}
                 </div>
               )}
               {agentState === 'thinking' && <Loader2 size={40} className="text-white animate-spin-slow" />}
               {agentState === 'speaking' && (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   {[0, 1, 2, 3, 4, 5, 6].map((i) => (
                     <div
                       key={i}
                       className="w-1 bg-gold rounded-full animate-waveform"
-                      style={{ animationDelay: `${i * 0.1}s`, height: '8px' }}
+                      style={{ animationDelay: `${i * 0.08}s`, height: '8px' }}
                     />
                   ))}
                 </div>
@@ -314,224 +390,153 @@ function VoiceAgentInner() {
               {agentState === 'connecting' && <Loader2 size={40} className="text-white animate-spin-slow" />}
               {agentState === 'error' && <MicOff size={40} className="text-white" />}
             </button>
-          </div>
 
-          {/* State Label */}
-          <div className="mt-4 text-center">
-            <p className={`text-sm font-medium ${agentState === 'error' ? 'text-error' : 'text-text-muted'}`}>
-              {agentState === 'idle' && 'Tap to speak'}
-              {agentState === 'listening' && (micMuted ? 'Muted — tap to unmute' : 'Listening...')}
-              {agentState === 'thinking' && 'Thinking...'}
-              {agentState === 'speaking' && 'Finous is speaking...'}
-              {agentState === 'connecting' && 'Connecting...'}
-              {agentState === 'error' && 'Connection lost. Tap to retry.'}
-            </p>
-            {/* Connection status */}
-            <p className="text-xs text-text-muted/60 mt-1 flex items-center justify-center gap-1">
-              {isConnected ? (
-                <>
-                  <Wifi size={10} className="text-success" /> Connected
-                </>
-              ) : hasStarted ? (
-                <>
-                  <WifiOff size={10} className="text-error" /> Disconnected
-                </>
-              ) : (
-                <>
-                  <Wifi size={10} /> Ready
-                </>
-              )}
-            </p>
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mt-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl max-w-md text-center">
-              <p className="text-sm text-red-800">{error}</p>
+            {/* State label */}
+            <div className="mt-3 text-center">
+              <p className={`text-sm font-medium transition-colors ${
+                agentState === 'error' ? 'text-error' : 
+                agentState === 'listening' ? 'text-gold-dark' :
+                agentState === 'speaking' ? 'text-navy' :
+                'text-text-muted'
+              }`}>
+                {agentState === 'idle' && 'Tap to speak'}
+                {agentState === 'listening' && (micMuted ? 'Muted' : 'Listening...')}
+                {agentState === 'thinking' && 'Thinking...'}
+                {agentState === 'speaking' && 'Speaking...'}
+                {agentState === 'connecting' && 'Connecting...'}
+                {agentState === 'error' && 'Tap to retry'}
+              </p>
             </div>
-          )}
 
-          {/* Control buttons */}
-          {hasStarted && isConnected && (
-            <div className="flex items-center gap-3 mt-4">
-              <button
-                onClick={() => setMicMuted(!micMuted)}
-                className={`p-2.5 rounded-full transition-all ${
-                  micMuted ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-text-muted hover:bg-gray-200'
-                }`}
-                title={micMuted ? 'Unmute mic' : 'Mute mic'}
-              >
-                {micMuted ? <MicOff size={16} /> : <Mic size={16} />}
-              </button>
-              <button
-                onClick={() => setOutputMuted(!outputMuted)}
-                className={`p-2.5 rounded-full transition-all ${
-                  outputMuted ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-text-muted hover:bg-gray-200'
-                }`}
-                title={outputMuted ? 'Unmute speaker' : 'Mute speaker'}
-              >
-                <Volume2 size={16} />
-              </button>
-              <button
-                onClick={() => {
-                  stop();
-                  setHasStarted(false);
-                }}
-                className="p-2.5 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-all"
-                title="End conversation"
-              >
-                <PhoneOff size={16} />
-              </button>
-            </div>
-          )}
+            {/* Error message */}
+            {error && (
+              <div className="mt-3 px-3 py-2 bg-red-50 border border-red-100 rounded-xl max-w-xs text-center animate-fade-in">
+                <p className="text-xs text-red-700">{error}</p>
+              </div>
+            )}
+
+            {/* Control buttons */}
+            {hasStarted && isConnected && (
+              <div className="flex items-center gap-2 mt-3 animate-fade-in">
+                <button
+                  onClick={() => setMicMuted(!micMuted)}
+                  className={`p-2.5 rounded-full transition-all btn-press ${
+                    micMuted ? 'bg-red-100 text-red-600' : 'bg-white text-text-muted hover:bg-gray-50 shadow-sm'
+                  }`}
+                  title={micMuted ? 'Unmute mic' : 'Mute mic'}
+                >
+                  {micMuted ? <MicOff size={16} /> : <Mic size={16} />}
+                </button>
+                <button
+                  onClick={() => setOutputMuted(!outputMuted)}
+                  className={`p-2.5 rounded-full transition-all btn-press ${
+                    outputMuted ? 'bg-red-100 text-red-600' : 'bg-white text-text-muted hover:bg-gray-50 shadow-sm'
+                  }`}
+                  title={outputMuted ? 'Unmute' : 'Mute'}
+                >
+                  <Volume2 size={16} />
+                </button>
+                <button
+                  onClick={() => { stop(); setHasStarted(false); }}
+                  className="p-2.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all btn-press"
+                  title="End"
+                >
+                  <PhoneOff size={16} />
+                </button>
+              </div>
+            )}
+          </div>
         </section>
 
-        {/* ═══ TEXT INPUT FALLBACK ═══ */}
-        <section className="pb-4">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <button
-              onClick={() => setShowTextInput(!showTextInput)}
-              className="text-xs text-text-muted hover:text-navy transition-colors flex items-center gap-1"
-            >
-              <MessageCircle size={12} />
-              {showTextInput ? 'Hide text input' : 'Or type your question'}
-            </button>
-          </div>
-
-          {showTextInput && (
-            <form onSubmit={handleTextSubmit} className="animate-fade-in max-w-lg mx-auto">
+        {/* ═══ TEXT INPUT (compact) ═══ */}
+        {showTextInput && (
+          <section className="px-4 pb-3 animate-fade-in">
+            <form onSubmit={handleTextSubmit} className="max-w-lg mx-auto">
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
-                  placeholder="Type a question about finance or tax..."
-                  className="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm
+                  placeholder="Type your question..."
+                  className="flex-1 px-4 py-3 rounded-2xl border border-gray-200 bg-white text-sm
                     focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold
                     placeholder:text-text-muted/50 transition-all"
                   disabled={!isConnected}
+                  autoFocus
                 />
                 <button
                   type="submit"
                   disabled={!textInput.trim() || !isConnected}
-                  className="px-4 py-3 rounded-xl bg-navy text-white text-sm font-medium
-                    hover:bg-navy-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-4 py-3 rounded-2xl bg-navy text-white font-medium
+                    hover:bg-navy-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed btn-press"
                 >
                   <Send size={16} />
                 </button>
               </div>
-              {!isConnected && (
-                <p className="text-xs text-text-muted mt-2 text-center">
-                  {hasStarted ? 'Connecting... please wait.' : 'Start a voice conversation first, or tap a suggestion below.'}
-                </p>
-              )}
             </form>
-          )}
+          </section>
+        )}
+
+        {/* ═══ CATEGORY TABS ═══ */}
+        <section className="px-4 pb-2">
+          <div className="flex gap-1 overflow-x-auto chips-scroll pb-1 -mx-1 px-1">
+            {CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              const isActive = activeTab === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveTab(cat.id)}
+                  className={`
+                    shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium
+                    transition-all btn-press whitespace-nowrap
+                    ${isActive 
+                      ? 'category-pill-active' 
+                      : 'bg-white text-text-muted hover:bg-gray-50 border border-gray-100'
+                    }
+                  `}
+                >
+                  <Icon size={13} />
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </section>
 
-        {/* ═══ SUGGESTED QUESTIONS & FEATURES ═══ */}
-        <section className="pb-4">
-          {/* Feature Categories */}
-          <div className="mb-4">
-            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2 px-1">
-              🎓 Learning Paths
-            </h3>
-            <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
-              {Object.entries(LEARNING_PATHS).map(([key, path]) => (
-                <button
-                  key={key}
-                  onClick={() => handleSuggestedClick(`Start learning path: ${path.title}`)}
-                  className="shrink-0 px-4 py-2 rounded-full border border-blue-200 bg-blue-50
-                    text-sm text-blue-900 hover:bg-blue-100 hover:border-blue-300 transition-all
-                    whitespace-nowrap"
-                >
-                  📚 {path.title}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2 px-1">
-              🌟 Real-World Scenarios
-            </h3>
-            <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
-              {Object.entries(SCENARIOS).map(([key, scenario]) => (
-                <button
-                  key={key}
-                  onClick={() => handleSuggestedClick(`Walk me through: ${scenario.title}`)}
-                  className="shrink-0 px-4 py-2 rounded-full border border-green-200 bg-green-50
-                    text-sm text-green-900 hover:bg-green-100 hover:border-green-300 transition-all
-                    whitespace-nowrap"
-                >
-                  🚶 {scenario.title}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2 px-1">
-              👤 Life Stage Guides
-            </h3>
-            <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
-              {Object.entries(LIFE_STAGES).map(([key, stage]) => (
-                <button
-                  key={key}
-                  onClick={() => handleSuggestedClick(`What should I learn in ${stage.title}?`)}
-                  className="shrink-0 px-4 py-2 rounded-full border border-purple-200 bg-purple-50
-                    text-sm text-purple-900 hover:bg-purple-100 hover:border-purple-300 transition-all
-                    whitespace-nowrap"
-                >
-                  🎯 {stage.title}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2 px-1">
-              ⚖️ Compare Concepts
-            </h3>
-            <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
-              {Object.entries(COMPARISONS).map(([key, comparison]) => (
-                <button
-                  key={key}
-                  onClick={() => handleSuggestedClick(`Compare: ${comparison.title}`)}
-                  className="shrink-0 px-4 py-2 rounded-full border border-orange-200 bg-orange-50
-                    text-sm text-orange-900 hover:bg-orange-100 hover:border-orange-300 transition-all
-                    whitespace-nowrap"
-                >
-                  🔄 {comparison.title}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-2">
-            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2 px-1">
-              💡 Quick Questions
-            </h3>
-            <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
-              {SUGGESTED_QUESTIONS.slice(0, 10).map((q, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSuggestedClick(q)}
-                  className="shrink-0 px-4 py-2 rounded-full border border-gold/30 bg-white
-                    text-sm text-navy hover:bg-gold/5 hover:border-gold/50 transition-all
-                    whitespace-nowrap"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
+        {/* ═══ SUGGESTION CHIPS ═══ */}
+        <section className="px-4 pb-3">
+          <div ref={chipsContainerRef} className="chips-scroll flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+            {chips.map((chip, i) => (
+              <button
+                key={`${activeTab}-${i}`}
+                onClick={chip.action}
+                className={`
+                  shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-medium
+                  transition-all btn-press whitespace-nowrap
+                  ${activeTab === 'quick' 
+                    ? 'bg-white border border-gold/20 text-navy hover:bg-gold/5 hover:border-gold/40' :
+                    activeTab === 'learn'
+                    ? 'bg-blue-50 border border-blue-100 text-blue-900 hover:bg-blue-100' :
+                    activeTab === 'scenarios'
+                    ? 'bg-green-50 border border-green-100 text-green-900 hover:bg-green-100' :
+                    activeTab === 'stages'
+                    ? 'bg-purple-50 border border-purple-100 text-purple-900 hover:bg-purple-100' :
+                    'bg-orange-50 border border-orange-100 text-orange-900 hover:bg-orange-100'
+                  }
+                `}
+              >
+                {chip.emoji && <span className="text-sm">{chip.emoji}</span>}
+                <span>{chip.text}</span>
+              </button>
+            ))}
           </div>
         </section>
 
         {/* ═══ TRANSCRIPT PANEL ═══ */}
         {conversation.length > 0 && (
-          <section className="flex-1 pb-4">
-            <div className="transcript-scroll overflow-y-auto max-h-[40vh] sm:max-h-[50vh] space-y-3 px-1">
+          <section className="flex-1 px-4 pb-4">
+            <div className="transcript-scroll overflow-y-auto max-h-[35vh] sm:max-h-[45vh] space-y-2.5">
               {conversation.map((msg) => (
                 <div
                   key={msg.id}
@@ -540,10 +545,10 @@ function VoiceAgentInner() {
                   }`}
                 >
                   <div
-                    className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                    className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 text-sm leading-relaxed ${
                       msg.role === 'user'
-                        ? 'bg-gray-100 text-text-dark rounded-br-md'
-                        : 'bg-white border border-gray-100 shadow-sm text-text-dark rounded-bl-md border-l-[3px] border-l-gold'
+                        ? 'message-user rounded-2xl rounded-br-md'
+                        : 'message-agent rounded-2xl rounded-bl-md border-l-[3px] border-l-gold'
                     }`}
                   >
                     <p>{msg.content}</p>
@@ -557,90 +562,97 @@ function VoiceAgentInner() {
 
         {/* ═══ EMPTY STATE ═══ */}
         {conversation.length === 0 && (
-          <section className="flex-1 flex flex-col items-center justify-center py-6 text-center animate-slide-up">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-navy/5 to-gold/5 flex items-center justify-center mb-4">
-              <Info size={24} className="text-navy/40" />
+          <section className="flex-1 flex flex-col items-center justify-start px-4 pt-2 pb-4 text-center animate-slide-up">
+            {/* Floating icon */}
+            <div className="relative mb-3">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-navy/5 to-gold/10 flex items-center justify-center animate-float">
+                <Sparkles size={24} className="text-gold" />
+              </div>
             </div>
-            <p className="text-sm text-text-muted max-w-xs leading-relaxed mb-4">
-              Tap the microphone and ask a question, or explore our guided features below.
-            </p>
             
-            <div className="w-full max-w-2xl px-2 space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleSuggestedClick('Start learning path: Investing Basics')}
-                  className="px-3 py-3 rounded-xl bg-blue-50 border border-blue-200 shadow-sm
-                    text-xs text-blue-900 font-medium hover:bg-blue-100 hover:border-blue-300
-                    transition-all text-left"
-                >
-                  📚 Learning Paths
-                  <p className="text-[10px] text-blue-700 mt-1 font-normal">Guided courses</p>
-                </button>
-                <button
-                  onClick={() => handleSuggestedClick('Walk me through: Your First Paycheck')}
-                  className="px-3 py-3 rounded-xl bg-green-50 border border-green-200 shadow-sm
-                    text-xs text-green-900 font-medium hover:bg-green-100 hover:border-green-300
-                    transition-all text-left"
-                >
-                  🚶 Scenarios
-                  <p className="text-[10px] text-green-700 mt-1 font-normal">Real-life walkthroughs</p>
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleSuggestedClick('What should I learn in my 20s?')}
-                  className="px-3 py-3 rounded-xl bg-purple-50 border border-purple-200 shadow-sm
-                    text-xs text-purple-900 font-medium hover:bg-purple-100 hover:border-purple-300
-                    transition-all text-left"
-                >
-                  🎯 Life Stages
-                  <p className="text-[10px] text-purple-700 mt-1 font-normal">Age-specific guides</p>
-                </button>
-                <button
-                  onClick={() => handleSuggestedClick('Compare: ETF vs Mutual Fund')}
-                  className="px-3 py-3 rounded-xl bg-orange-50 border border-orange-200 shadow-sm
-                    text-xs text-orange-900 font-medium hover:bg-orange-100 hover:border-orange-300
-                    transition-all text-left"
-                >
-                  ⚖️ Comparisons
-                  <p className="text-[10px] text-orange-700 mt-1 font-normal">Side-by-side analysis</p>
-                </button>
-              </div>
+            <p className="text-xs text-text-muted max-w-[260px] leading-relaxed">
+              Tap the mic or choose a topic below to start learning.
+            </p>
+
+            {/* Quick action buttons */}
+            <div className="grid grid-cols-2 gap-2 mt-4 w-full max-w-xs">
+              <button
+                onClick={() => { setActiveTab('learn'); handleSuggestedClick('Start learning path: Investing Basics'); }}
+                className="flex flex-col items-start p-3 rounded-2xl bg-blue-50 border border-blue-100
+                  hover:bg-blue-100 hover:border-blue-200 transition-all btn-press text-left"
+              >
+                <BookOpen size={16} className="text-blue-600 mb-1" />
+                <span className="text-xs font-semibold text-blue-900">Learn</span>
+                <span className="text-[10px] text-blue-600">Guided paths</span>
+              </button>
+              <button
+                onClick={() => { setActiveTab('scenarios'); handleSuggestedClick('Walk me through: Your First Paycheck'); }}
+                className="flex flex-col items-start p-3 rounded-2xl bg-green-50 border border-green-100
+                  hover:bg-green-100 hover:border-green-200 transition-all btn-press text-left"
+              >
+                <Map size={16} className="text-green-600 mb-1" />
+                <span className="text-xs font-semibold text-green-900">Scenarios</span>
+                <span className="text-[10px] text-green-600">Life walkthroughs</span>
+              </button>
+              <button
+                onClick={() => { setActiveTab('stages'); handleSuggestedClick('What should I learn in my 20s?'); }}
+                className="flex flex-col items-start p-3 rounded-2xl bg-purple-50 border border-purple-100
+                  hover:bg-purple-100 hover:border-purple-200 transition-all btn-press text-left"
+              >
+                <User size={16} className="text-purple-600 mb-1" />
+                <span className="text-xs font-semibold text-purple-900">My Stage</span>
+                <span className="text-[10px] text-purple-600">Age-specific</span>
+              </button>
+              <button
+                onClick={() => { setActiveTab('compare'); handleSuggestedClick('Compare: ETF vs Mutual Fund'); }}
+                className="flex flex-col items-start p-3 rounded-2xl bg-orange-50 border border-orange-100
+                  hover:bg-orange-100 hover:border-orange-200 transition-all btn-press text-left"
+              >
+                <GitCompare size={16} className="text-orange-600 mb-1" />
+                <span className="text-xs font-semibold text-orange-900">Compare</span>
+                <span className="text-[10px] text-orange-600">Side by side</span>
+              </button>
             </div>
           </section>
         )}
 
-        {/* ═══ DISCLAIMER BANNER ═══ */}
-        <section className="py-4">
-          <div className="bg-amber-50 border border-amber-200/50 rounded-xl px-4 py-3 flex items-start gap-2.5">
-            <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-800 leading-relaxed">
-              <strong>Disclaimer:</strong> Finous Voice provides general information only. It does not give financial, tax, or investment advice. Consult a qualified advisor for personalized guidance.
+        {/* ═══ DISCLAIMER (compact) ═══ */}
+        <section className="px-4 pb-3">
+          <div className="bg-amber-50/50 border border-amber-100/50 rounded-xl px-3 py-2 flex items-start gap-2">
+            <AlertCircle size={12} className="text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-[10px] text-amber-800 leading-relaxed">
+              <strong>Info only.</strong> Not financial or tax advice. Consult a qualified advisor for personalized guidance.
             </p>
           </div>
         </section>
       </main>
 
+      {/* ═══ FLOATING TEXT INPUT BUTTON ═══ */}
+      {!showTextInput && conversation.length > 0 && (
+        <button
+          onClick={() => setShowTextInput(true)}
+          className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40
+            w-12 h-12 rounded-full bg-navy text-white shadow-lg
+            flex items-center justify-center hover:bg-navy-light
+            transition-all btn-press"
+          aria-label="Type a question"
+        >
+          <MessageCircle size={18} />
+        </button>
+      )}
+
       {/* ═══ FOOTER ═══ */}
-      <footer className="safe-bottom border-t border-gray-100 bg-white/60 mt-auto">
-        <div className="max-w-[900px] mx-auto px-4 py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+      <footer className="border-t border-gray-100 bg-white/60 mt-auto">
+        <div className="max-w-[900px] mx-auto px-4 py-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-navy">Finous</span>
-              <span className="text-xs text-text-muted">by Nidhiverse Pvt Ltd</span>
+              <span className="text-xs font-semibold text-navy">Finous</span>
+              <span className="text-[10px] text-text-muted">by Nidhiverse Pvt Ltd</span>
             </div>
-            <div className="flex items-center gap-4 text-xs text-text-muted">
-              <a href="mailto:founder@finous.site" className="hover:text-navy transition-colors">
-                founder@finous.site
-              </a>
-              <span className="hidden sm:inline">·</span>
-              <span className="hidden sm:inline">Confidential — For informational purposes only</span>
-            </div>
+            <a href="mailto:founder@finous.site" className="text-[10px] text-text-muted hover:text-navy transition-colors">
+              founder@finous.site
+            </a>
           </div>
-          <p className="text-center text-[10px] text-text-muted/50 mt-3 sm:hidden">
-            Confidential — For informational purposes only
-          </p>
         </div>
       </footer>
     </div>
