@@ -1,13 +1,11 @@
 // Vercel Serverless Function: /api/token
 // Returns a short-lived Deepgram temporary token for the voice agent
 //
-// Environment variables needed (set in Vercel dashboard):
-// - DEEPGRAM_API_KEY: Your Deepgram API key
-//
-// API Reference: https://developers.deepgram.com/reference/auth/tokens/grant
+// ⚠️ PREVIEW BUILD: Uses hardcoded API key as fallback
+// For production, set DEEPGRAM_API_KEY in Vercel environment variables
 
 export default async function handler(req, res) {
-  // Allow CORS for the frontend
+  // Allow CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -16,24 +14,14 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.DEEPGRAM_API_KEY;
-
-  if (!apiKey) {
-    console.error('DEEPGRAM_API_KEY is not set in environment variables');
-    return res.status(500).json({ 
-      error: 'Voice agent not configured. Please set DEEPGRAM_API_KEY in Vercel dashboard.' 
-    });
-  }
+  // Use environment variable first, fall back to hardcoded key (preview only)
+  const apiKey = process.env.DEEPGRAM_API_KEY || '13f24d75e9b08c53977e73255a4c175f765df2ad';
 
   try {
-    // Create a short-lived token using Deepgram's Token Grant API
-    // POST https://api.deepgram.com/v1/auth/tokens
-    // Returns a JWT with usage::write permission for voice APIs
     const response = await fetch('https://api.deepgram.com/v1/auth/tokens', {
       method: 'POST',
       headers: {
@@ -41,8 +29,6 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        // Token valid for 1 hour (3600 seconds)
-        // The SDK handles reconnection and token refresh automatically
         ttl_seconds: 3600,
       }),
     });
@@ -55,8 +41,6 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    // Return the token to the client
-    // The Deepgram SDK uses this as a Bearer token in the WebSocket Sec-WebSocket-Protocol header
     return res.status(200).json({
       token: data.access_token,
       expires: data.expires_in,

@@ -59,12 +59,9 @@ Tone:
 
 const AGENT_CONFIG: any = {
   auth: {
-    tokenFactory: async (): Promise<string> => {
-      const res = await fetch('/api/token');
-      if (!res.ok) throw new Error('Failed to get token');
-      const data = await res.json();
-      return data.token;
-    },
+    // ⚠️ SECURITY WARNING: This API key is hardcoded for preview only!
+    // In production, use environment variables and the /api/token endpoint
+    apiKey: '13f24d75e9b08c53977e73255a4c175f765df2ad',
   },
   agent: {
     listen: {
@@ -250,6 +247,23 @@ function VoiceAgentInner() {
 
       {/* ═══ MAIN CONTENT ═══ */}
       <main className="flex-1 flex flex-col max-w-[900px] mx-auto w-full px-4">
+        {/* Security Warning Banner */}
+        <section className="pt-4 pb-2">
+          <div className="bg-red-50 border-2 border-red-300 rounded-xl px-4 py-3 flex items-start gap-2.5">
+            <AlertCircle size={20} className="text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-red-800 mb-1">
+                ⚠️ PREVIEW MODE - API KEY HARDCODED
+              </p>
+              <p className="text-xs text-red-700 leading-relaxed">
+                This is a preview build with a hardcoded API key for testing. 
+                <strong> Do not deploy this to production.</strong> For production use, 
+                remove the hardcoded key and use environment variables instead.
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* Hero Section */}
         <section className="pt-6 pb-4 sm:pt-10 sm:pb-6 text-center">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-navy leading-tight">
