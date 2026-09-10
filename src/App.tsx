@@ -12,13 +12,12 @@ import {
   MicOff,
   ArrowLeft,
   Volume2,
+  VolumeX,
   MessageCircle,
   Loader2,
   AlertCircle,
   Send,
   PhoneOff,
-  Wifi,
-  WifiOff,
   X,
   BookOpen,
   Map,
@@ -48,7 +47,6 @@ const SYSTEM_PROMPT = ENHANCED_SYSTEM_PROMPT;
 
 const AGENT_CONFIG: any = {
   auth: {
-    // ⚠️ SECURITY WARNING: This API key is hardcoded for preview only!
     apiKey: '13f24d75e9b08c53977e73255a4c175f765df2ad',
   },
   agent: {
@@ -94,12 +92,12 @@ const AGENT_CONFIG: any = {
 
 type CategoryTab = 'quick' | 'learn' | 'scenarios' | 'stages' | 'compare';
 
-const CATEGORIES: { id: CategoryTab; label: string; icon: any; color: string }[] = [
-  { id: 'quick', label: 'Quick', icon: Sparkles, color: 'gold' },
-  { id: 'learn', label: 'Learn', icon: BookOpen, color: 'blue' },
-  { id: 'scenarios', label: 'Scenarios', icon: Map, color: 'green' },
-  { id: 'stages', label: 'Stages', icon: User, color: 'purple' },
-  { id: 'compare', label: 'Compare', icon: GitCompare, color: 'orange' },
+const CATEGORIES: { id: CategoryTab; label: string; icon: any }[] = [
+  { id: 'quick', label: 'Quick', icon: Sparkles },
+  { id: 'learn', label: 'Learn', icon: BookOpen },
+  { id: 'scenarios', label: 'Scenarios', icon: Map },
+  { id: 'stages', label: 'Stages', icon: User },
+  { id: 'compare', label: 'Compare', icon: GitCompare },
 ];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -121,7 +119,6 @@ function VoiceAgentInner() {
   const [showBanner, setShowBanner] = useState(true);
   
   const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const chipsContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -241,117 +238,118 @@ function VoiceAgentInner() {
   const chips = getChipsForTab();
 
   return (
-    <div className="min-h-screen flex flex-col bg-bg safe-bottom">
-      {/* ═══ COMPACT HEADER ═══ */}
-      <header className="sticky top-0 z-50 header-blur bg-white/90 border-b border-gray-100/50 safe-top">
-        <div className="max-w-[900px] mx-auto px-4 py-2.5 flex items-center justify-between">
+    <div className="min-h-screen flex flex-col safe-bottom">
+      {/* ═══ AMBIENT BACKGROUND ═══ */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full transition-all duration-1000 ${
+          agentState === 'listening' ? 'bg-green-500/10 blur-[120px]' :
+          agentState === 'speaking' ? 'bg-amber-500/10 blur-[120px]' :
+          agentState === 'thinking' ? 'bg-indigo-500/10 blur-[120px]' :
+          'bg-indigo-500/5 blur-[100px]'
+        }`} />
+      </div>
+
+      {/* ═══ HEADER ═══ */}
+      <header className="sticky top-0 z-50 glass-dark safe-top">
+        <div className="max-w-[900px] mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <a
               href="https://www.finous.site/"
-              className="flex items-center gap-1 text-text-muted hover:text-navy transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
               aria-label="Back to Finous"
             >
-              <ArrowLeft size={18} strokeWidth={2.5} />
+              <ArrowLeft size={16} className="text-white/70" />
             </a>
-            <div className="h-4 w-px bg-gray-200" />
-            <div className="flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center">
-                <span className="text-white text-[10px] font-bold">F</span>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                <span className="text-white text-xs font-bold">F</span>
               </div>
-              <span className="text-base font-semibold text-navy tracking-tight">Finous</span>
+              <span className="text-sm font-semibold text-white">Finous</span>
             </div>
           </div>
           
           {/* Connection indicator */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             {isConnected ? (
-              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-success/10">
-                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                <span className="text-[10px] font-medium text-success">Live</span>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-[10px] font-medium text-green-400">Live</span>
               </div>
             ) : hasStarted ? (
-              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-error/10">
-                <div className="w-1.5 h-1.5 rounded-full bg-error" />
-                <span className="text-[10px] font-medium text-error">Offline</span>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                <span className="text-[10px] font-medium text-red-400">Offline</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100">
-                <Wifi size={10} className="text-text-muted" />
-                <span className="text-[10px] font-medium text-text-muted">Ready</span>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10">
+                <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
+                <span className="text-[10px] font-medium text-white/40">Ready</span>
               </div>
             )}
           </div>
         </div>
       </header>
 
-      {/* ═══ SECURITY BANNER (dismissible) ═══ */}
+      {/* ═══ SECURITY BANNER ═══ */}
       {showBanner && (
-        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-between gap-2">
-          <p className="text-[11px] text-amber-800 flex items-center gap-1.5">
+        <div className="bg-amber-500/5 border-b border-amber-500/10 px-4 py-2 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-amber-400/80 flex items-center gap-1.5">
             <AlertCircle size={12} className="shrink-0" />
-            <span>Preview mode with hardcoded API key</span>
+            <span>Preview mode</span>
           </p>
           <button 
             onClick={() => setShowBanner(false)}
-            className="p-1 rounded-full hover:bg-amber-100 transition-colors"
+            className="p-1 rounded-full hover:bg-amber-500/10 transition-colors"
             aria-label="Dismiss"
           >
-            <X size={14} className="text-amber-700" />
+            <X size={14} className="text-amber-400/60" />
           </button>
         </div>
       )}
 
       {/* ═══ MAIN CONTENT ═══ */}
-      <main className="flex-1 flex flex-col max-w-[900px] mx-auto w-full">
+      <main className="flex-1 flex flex-col max-w-[900px] mx-auto w-full relative z-10">
         
-        {/* ═══ HERO + MIC SECTION ═══ */}
-        <section className="relative px-4 pt-4 pb-2 sm:pt-8 sm:pb-4">
-          {/* Background gradient */}
-          <div className="absolute inset-0 bg-gradient-to-b from-gold/[0.03] via-transparent to-transparent pointer-events-none" />
-          
-          {/* Headline - compact on mobile */}
-          <div className="text-center mb-4 sm:mb-6 relative">
-            <h1 className="text-xl sm:text-3xl lg:text-4xl font-bold text-navy leading-tight">
-              Ask Finous anything<br className="sm:hidden" /> about money.
+        {/* ═══ HERO + ORB SECTION ═══ */}
+        <section className="relative px-4 pt-6 pb-4 sm:pt-10 sm:pb-6">
+          {/* Headline */}
+          <div className="text-center mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-4xl font-bold leading-tight">
+              <span className="gradient-text">Ask Finous</span>
+              <br className="sm:hidden" />
+              <span className="text-white"> anything about money</span>
             </h1>
-            <p className="mt-1.5 sm:mt-2 text-text-muted text-xs sm:text-sm max-w-md mx-auto">
-              Personal finance & tax in plain English. Information, never advice.
+            <p className="mt-2 text-white/50 text-xs sm:text-sm max-w-md mx-auto">
+              Personal finance & tax in plain English
             </p>
           </div>
 
-          {/* ═══ MIC BUTTON - THE HERO ═══ */}
+          {/* ═══ THE ORB - CENTER PIECE ═══ */}
           <div className="flex flex-col items-center relative">
-            {/* Ripple effects when listening */}
+            {/* Ripple rings when listening */}
             {agentState === 'listening' && (
               <>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[180px] sm:w-[240px] sm:h-[240px] rounded-full border-2 border-gold/20 animate-ripple" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[180px] sm:w-[240px] sm:h-[240px] rounded-full border-2 border-gold/10 animate-ripple" style={{ animationDelay: '0.5s' }} />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full border border-green-500/20 animate-ripple" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full border border-green-500/10 animate-ripple" style={{ animationDelay: '0.7s' }} />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full border border-green-500/5 animate-ripple" style={{ animationDelay: '1.4s' }} />
               </>
             )}
-            
-            {/* Ambient glow */}
-            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] sm:w-[280px] sm:h-[280px] rounded-full transition-all duration-500 ${
-              agentState === 'idle' ? 'bg-gold/[0.06]' :
-              agentState === 'listening' ? 'bg-gold/[0.12]' :
-              agentState === 'speaking' ? 'bg-navy/[0.06]' : 'bg-transparent'
-            }`} />
 
-            {/* Main Button */}
+            {/* Main Orb Button */}
             <button
               onClick={handleMicTap}
               className={`
-                relative z-10 w-[140px] h-[140px] sm:w-[180px] sm:h-[180px] rounded-full
+                relative z-10 w-[160px] h-[160px] sm:w-[200px] sm:h-[200px] rounded-full
                 flex items-center justify-center
-                transition-all duration-300 ease-out
+                transition-all duration-500 ease-out
                 focus:outline-none btn-press
-                ${agentState === 'idle' ? 'bg-gradient-to-br from-gold to-gold-dark mic-glow cursor-pointer hover:scale-105' : ''}
-                ${agentState === 'listening' ? 'bg-gradient-to-br from-gold to-gold-dark mic-glow-active animate-pulse-dot cursor-pointer' : ''}
-                ${agentState === 'thinking' ? 'bg-gradient-to-br from-navy to-navy-light cursor-wait' : ''}
-                ${agentState === 'speaking' ? 'bg-gradient-to-br from-navy to-navy-light' : ''}
-                ${agentState === 'connecting' ? 'bg-navy/80 cursor-wait' : ''}
-                ${agentState === 'error' ? 'bg-gradient-to-br from-red-500 to-red-700 cursor-pointer' : ''}
+                ${agentState === 'idle' ? 'orb orb-idle animate-orb-breathe cursor-pointer hover:scale-105' : ''}
+                ${agentState === 'listening' ? 'orb orb-listening animate-pulse-glow cursor-pointer' : ''}
+                ${agentState === 'thinking' ? 'orb animate-pulse-glow cursor-wait' : ''}
+                ${agentState === 'speaking' ? 'orb orb-speaking animate-pulse-glow' : ''}
+                ${agentState === 'connecting' ? 'orb animate-pulse-glow cursor-wait' : ''}
+                ${agentState === 'error' ? 'bg-gradient-to-br from-red-500/60 to-red-700/60 cursor-pointer' : ''}
               `}
-              style={{ boxShadow: agentState === 'idle' ? undefined : undefined }}
               aria-label={
                 agentState === 'idle' ? 'Tap to start' :
                 agentState === 'listening' ? 'Listening' :
@@ -359,47 +357,52 @@ function VoiceAgentInner() {
                 agentState === 'error' ? 'Retry' : 'Connecting'
               }
             >
-              {agentState === 'idle' && (
-                <div className="flex flex-col items-center gap-1">
-                  <Mic size={44} className="text-white sm:w-14 sm:h-14" strokeWidth={2} />
-                </div>
-              )}
-              {agentState === 'listening' && (
-                <div className="flex items-center gap-1.5">
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <div
-                      key={i}
-                      className="w-1.5 bg-white rounded-full animate-waveform"
-                      style={{ animationDelay: `${i * 0.12}s`, height: '10px' }}
-                    />
-                  ))}
-                </div>
-              )}
-              {agentState === 'thinking' && <Loader2 size={40} className="text-white animate-spin-slow" />}
-              {agentState === 'speaking' && (
-                <div className="flex items-center gap-1">
-                  {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                    <div
-                      key={i}
-                      className="w-1 bg-gold rounded-full animate-waveform"
-                      style={{ animationDelay: `${i * 0.08}s`, height: '8px' }}
-                    />
-                  ))}
-                </div>
-              )}
-              {agentState === 'connecting' && <Loader2 size={40} className="text-white animate-spin-slow" />}
-              {agentState === 'error' && <MicOff size={40} className="text-white" />}
+              {/* Inner glow */}
+              <div className="absolute inset-4 rounded-full bg-white/5 backdrop-blur-sm" />
+              
+              {/* Content */}
+              <div className="relative z-10">
+                {agentState === 'idle' && (
+                  <Mic size={48} className="text-white/90 sm:w-14 sm:h-14" strokeWidth={1.5} />
+                )}
+                {agentState === 'listening' && (
+                  <div className="flex items-center gap-1.5">
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className="w-1 bg-white/90 rounded-full animate-waveform"
+                        style={{ animationDelay: `${i * 0.12}s`, height: '12px' }}
+                      />
+                    ))}
+                  </div>
+                )}
+                {agentState === 'thinking' && <Loader2 size={44} className="text-white/90 animate-spin-slow" />}
+                {agentState === 'speaking' && (
+                  <div className="flex items-center gap-1">
+                    {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                      <div
+                        key={i}
+                        className="w-1 bg-white/90 rounded-full animate-waveform"
+                        style={{ animationDelay: `${i * 0.08}s`, height: '10px' }}
+                      />
+                    ))}
+                  </div>
+                )}
+                {agentState === 'connecting' && <Loader2 size={44} className="text-white/90 animate-spin-slow" />}
+                {agentState === 'error' && <MicOff size={44} className="text-white/90" />}
+              </div>
             </button>
 
             {/* State label */}
-            <div className="mt-3 text-center">
+            <div className="mt-5 text-center">
               <p className={`text-sm font-medium transition-colors ${
-                agentState === 'error' ? 'text-error' : 
-                agentState === 'listening' ? 'text-gold-dark' :
-                agentState === 'speaking' ? 'text-navy' :
-                'text-text-muted'
+                agentState === 'error' ? 'text-red-400' : 
+                agentState === 'listening' ? 'text-green-400' :
+                agentState === 'speaking' ? 'text-amber-400' :
+                agentState === 'thinking' ? 'text-indigo-400' :
+                'text-white/50'
               }`}>
-                {agentState === 'idle' && 'Tap to speak'}
+                {agentState === 'idle' && 'Tap the orb to speak'}
                 {agentState === 'listening' && (micMuted ? 'Muted' : 'Listening...')}
                 {agentState === 'thinking' && 'Thinking...'}
                 {agentState === 'speaking' && 'Speaking...'}
@@ -410,18 +413,18 @@ function VoiceAgentInner() {
 
             {/* Error message */}
             {error && (
-              <div className="mt-3 px-3 py-2 bg-red-50 border border-red-100 rounded-xl max-w-xs text-center animate-fade-in">
-                <p className="text-xs text-red-700">{error}</p>
+              <div className="mt-3 px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-2xl max-w-xs text-center animate-fade-in">
+                <p className="text-xs text-red-400">{error}</p>
               </div>
             )}
 
             {/* Control buttons */}
             {hasStarted && isConnected && (
-              <div className="flex items-center gap-2 mt-3 animate-fade-in">
+              <div className="flex items-center gap-2 mt-4 animate-fade-in">
                 <button
                   onClick={() => setMicMuted(!micMuted)}
-                  className={`p-2.5 rounded-full transition-all btn-press ${
-                    micMuted ? 'bg-red-100 text-red-600' : 'bg-white text-text-muted hover:bg-gray-50 shadow-sm'
+                  className={`p-3 rounded-full transition-all btn-press ${
+                    micMuted ? 'bg-red-500/20 text-red-400 border border-red-500/20' : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
                   }`}
                   title={micMuted ? 'Unmute mic' : 'Mute mic'}
                 >
@@ -429,16 +432,16 @@ function VoiceAgentInner() {
                 </button>
                 <button
                   onClick={() => setOutputMuted(!outputMuted)}
-                  className={`p-2.5 rounded-full transition-all btn-press ${
-                    outputMuted ? 'bg-red-100 text-red-600' : 'bg-white text-text-muted hover:bg-gray-50 shadow-sm'
+                  className={`p-3 rounded-full transition-all btn-press ${
+                    outputMuted ? 'bg-red-500/20 text-red-400 border border-red-500/20' : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
                   }`}
                   title={outputMuted ? 'Unmute' : 'Mute'}
                 >
-                  <Volume2 size={16} />
+                  {outputMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </button>
                 <button
                   onClick={() => { stop(); setHasStarted(false); }}
-                  className="p-2.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all btn-press"
+                  className="p-3 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-all btn-press"
                   title="End"
                 >
                   <PhoneOff size={16} />
@@ -448,7 +451,7 @@ function VoiceAgentInner() {
           </div>
         </section>
 
-        {/* ═══ TEXT INPUT (compact) ═══ */}
+        {/* ═══ TEXT INPUT ═══ */}
         {showTextInput && (
           <section className="px-4 pb-3 animate-fade-in">
             <form onSubmit={handleTextSubmit} className="max-w-lg mx-auto">
@@ -458,17 +461,17 @@ function VoiceAgentInner() {
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
                   placeholder="Type your question..."
-                  className="flex-1 px-4 py-3 rounded-2xl border border-gray-200 bg-white text-sm
-                    focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold
-                    placeholder:text-text-muted/50 transition-all"
+                  className="flex-1 px-4 py-3 rounded-2xl bg-white/5 border border-white/10 text-white text-sm
+                    focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/30
+                    placeholder:text-white/30 transition-all"
                   disabled={!isConnected}
                   autoFocus
                 />
                 <button
                   type="submit"
                   disabled={!textInput.trim() || !isConnected}
-                  className="px-4 py-3 rounded-2xl bg-navy text-white font-medium
-                    hover:bg-navy-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed btn-press"
+                  className="px-4 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium
+                    hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed btn-press"
                 >
                   <Send size={16} />
                 </button>
@@ -479,7 +482,7 @@ function VoiceAgentInner() {
 
         {/* ═══ CATEGORY TABS ═══ */}
         <section className="px-4 pb-2">
-          <div className="flex gap-1 overflow-x-auto chips-scroll pb-1 -mx-1 px-1">
+          <div className="flex gap-1.5 overflow-x-auto chips-scroll pb-1 -mx-1 px-1">
             {CATEGORIES.map((cat) => {
               const Icon = cat.icon;
               const isActive = activeTab === cat.id;
@@ -492,7 +495,7 @@ function VoiceAgentInner() {
                     transition-all btn-press whitespace-nowrap
                     ${isActive 
                       ? 'category-pill-active' 
-                      : 'bg-white text-text-muted hover:bg-gray-50 border border-gray-100'
+                      : 'bg-white/5 text-white/50 hover:bg-white/10 border border-white/10'
                     }
                   `}
                 >
@@ -506,25 +509,15 @@ function VoiceAgentInner() {
 
         {/* ═══ SUGGESTION CHIPS ═══ */}
         <section className="px-4 pb-3">
-          <div ref={chipsContainerRef} className="chips-scroll flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+          <div className="chips-scroll flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
             {chips.map((chip, i) => (
               <button
                 key={`${activeTab}-${i}`}
                 onClick={chip.action}
-                className={`
-                  shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-medium
-                  transition-all btn-press whitespace-nowrap
-                  ${activeTab === 'quick' 
-                    ? 'bg-white border border-gold/20 text-navy hover:bg-gold/5 hover:border-gold/40' :
-                    activeTab === 'learn'
-                    ? 'bg-blue-50 border border-blue-100 text-blue-900 hover:bg-blue-100' :
-                    activeTab === 'scenarios'
-                    ? 'bg-green-50 border border-green-100 text-green-900 hover:bg-green-100' :
-                    activeTab === 'stages'
-                    ? 'bg-purple-50 border border-purple-100 text-purple-900 hover:bg-purple-100' :
-                    'bg-orange-50 border border-orange-100 text-orange-900 hover:bg-orange-100'
-                  }
-                `}
+                className="shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-medium
+                  bg-white/5 border border-white/10 text-white/70
+                  hover:bg-white/10 hover:border-white/20 hover:text-white
+                  transition-all btn-press whitespace-nowrap"
               >
                 {chip.emoji && <span className="text-sm">{chip.emoji}</span>}
                 <span>{chip.text}</span>
@@ -545,10 +538,10 @@ function VoiceAgentInner() {
                   }`}
                 >
                   <div
-                    className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 text-sm leading-relaxed ${
+                    className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 text-sm leading-relaxed rounded-2xl ${
                       msg.role === 'user'
-                        ? 'message-user rounded-2xl rounded-br-md'
-                        : 'message-agent rounded-2xl rounded-bl-md border-l-[3px] border-l-gold'
+                        ? 'message-user rounded-br-md'
+                        : 'message-agent rounded-bl-md'
                     }`}
                   >
                     <p>{msg.content}</p>
@@ -562,66 +555,66 @@ function VoiceAgentInner() {
 
         {/* ═══ EMPTY STATE ═══ */}
         {conversation.length === 0 && (
-          <section className="flex-1 flex flex-col items-center justify-start px-4 pt-2 pb-4 text-center animate-slide-up">
+          <section className="flex-1 flex flex-col items-center justify-start px-4 pt-4 pb-4 text-center animate-slide-up">
             {/* Floating icon */}
-            <div className="relative mb-3">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-navy/5 to-gold/10 flex items-center justify-center animate-float">
-                <Sparkles size={24} className="text-gold" />
+            <div className="relative mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-purple-600/10 border border-white/5 flex items-center justify-center animate-float">
+                <Sparkles size={24} className="text-indigo-400" />
               </div>
             </div>
             
-            <p className="text-xs text-text-muted max-w-[260px] leading-relaxed">
-              Tap the mic or choose a topic below to start learning.
+            <p className="text-xs text-white/40 max-w-[260px] leading-relaxed">
+              Tap the orb or choose a topic below
             </p>
 
             {/* Quick action buttons */}
-            <div className="grid grid-cols-2 gap-2 mt-4 w-full max-w-xs">
+            <div className="grid grid-cols-2 gap-2.5 mt-5 w-full max-w-xs">
               <button
                 onClick={() => { setActiveTab('learn'); handleSuggestedClick('Start learning path: Investing Basics'); }}
-                className="flex flex-col items-start p-3 rounded-2xl bg-blue-50 border border-blue-100
-                  hover:bg-blue-100 hover:border-blue-200 transition-all btn-press text-left"
+                className="flex flex-col items-start p-3.5 rounded-2xl bg-white/5 border border-white/10
+                  hover:bg-white/10 hover:border-white/20 transition-all btn-press text-left"
               >
-                <BookOpen size={16} className="text-blue-600 mb-1" />
-                <span className="text-xs font-semibold text-blue-900">Learn</span>
-                <span className="text-[10px] text-blue-600">Guided paths</span>
+                <BookOpen size={16} className="text-indigo-400 mb-1.5" />
+                <span className="text-xs font-semibold text-white">Learn</span>
+                <span className="text-[10px] text-white/40">Guided paths</span>
               </button>
               <button
                 onClick={() => { setActiveTab('scenarios'); handleSuggestedClick('Walk me through: Your First Paycheck'); }}
-                className="flex flex-col items-start p-3 rounded-2xl bg-green-50 border border-green-100
-                  hover:bg-green-100 hover:border-green-200 transition-all btn-press text-left"
+                className="flex flex-col items-start p-3.5 rounded-2xl bg-white/5 border border-white/10
+                  hover:bg-white/10 hover:border-white/20 transition-all btn-press text-left"
               >
-                <Map size={16} className="text-green-600 mb-1" />
-                <span className="text-xs font-semibold text-green-900">Scenarios</span>
-                <span className="text-[10px] text-green-600">Life walkthroughs</span>
+                <Map size={16} className="text-green-400 mb-1.5" />
+                <span className="text-xs font-semibold text-white">Scenarios</span>
+                <span className="text-[10px] text-white/40">Life walkthroughs</span>
               </button>
               <button
                 onClick={() => { setActiveTab('stages'); handleSuggestedClick('What should I learn in my 20s?'); }}
-                className="flex flex-col items-start p-3 rounded-2xl bg-purple-50 border border-purple-100
-                  hover:bg-purple-100 hover:border-purple-200 transition-all btn-press text-left"
+                className="flex flex-col items-start p-3.5 rounded-2xl bg-white/5 border border-white/10
+                  hover:bg-white/10 hover:border-white/20 transition-all btn-press text-left"
               >
-                <User size={16} className="text-purple-600 mb-1" />
-                <span className="text-xs font-semibold text-purple-900">My Stage</span>
-                <span className="text-[10px] text-purple-600">Age-specific</span>
+                <User size={16} className="text-purple-400 mb-1.5" />
+                <span className="text-xs font-semibold text-white">My Stage</span>
+                <span className="text-[10px] text-white/40">Age-specific</span>
               </button>
               <button
                 onClick={() => { setActiveTab('compare'); handleSuggestedClick('Compare: ETF vs Mutual Fund'); }}
-                className="flex flex-col items-start p-3 rounded-2xl bg-orange-50 border border-orange-100
-                  hover:bg-orange-100 hover:border-orange-200 transition-all btn-press text-left"
+                className="flex flex-col items-start p-3.5 rounded-2xl bg-white/5 border border-white/10
+                  hover:bg-white/10 hover:border-white/20 transition-all btn-press text-left"
               >
-                <GitCompare size={16} className="text-orange-600 mb-1" />
-                <span className="text-xs font-semibold text-orange-900">Compare</span>
-                <span className="text-[10px] text-orange-600">Side by side</span>
+                <GitCompare size={16} className="text-amber-400 mb-1.5" />
+                <span className="text-xs font-semibold text-white">Compare</span>
+                <span className="text-[10px] text-white/40">Side by side</span>
               </button>
             </div>
           </section>
         )}
 
-        {/* ═══ DISCLAIMER (compact) ═══ */}
+        {/* ═══ DISCLAIMER ═══ */}
         <section className="px-4 pb-3">
-          <div className="bg-amber-50/50 border border-amber-100/50 rounded-xl px-3 py-2 flex items-start gap-2">
-            <AlertCircle size={12} className="text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-[10px] text-amber-800 leading-relaxed">
-              <strong>Info only.</strong> Not financial or tax advice. Consult a qualified advisor for personalized guidance.
+          <div className="bg-white/[0.02] border border-white/5 rounded-2xl px-3 py-2.5 flex items-start gap-2">
+            <AlertCircle size={12} className="text-amber-400/60 shrink-0 mt-0.5" />
+            <p className="text-[10px] text-white/30 leading-relaxed">
+              <strong className="text-white/40">Info only.</strong> Not financial or tax advice. Consult a qualified advisor.
             </p>
           </div>
         </section>
@@ -631,10 +624,10 @@ function VoiceAgentInner() {
       {!showTextInput && conversation.length > 0 && (
         <button
           onClick={() => setShowTextInput(true)}
-          className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40
-            w-12 h-12 rounded-full bg-navy text-white shadow-lg
-            flex items-center justify-center hover:bg-navy-light
-            transition-all btn-press"
+          className="fixed bottom-24 right-4 sm:bottom-8 sm:right-6 z-40
+            w-12 h-12 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg
+            flex items-center justify-center hover:from-indigo-600 hover:to-purple-700
+            transition-all btn-press shadow-indigo-500/20"
           aria-label="Type a question"
         >
           <MessageCircle size={18} />
@@ -642,14 +635,14 @@ function VoiceAgentInner() {
       )}
 
       {/* ═══ FOOTER ═══ */}
-      <footer className="border-t border-gray-100 bg-white/60 mt-auto">
+      <footer className="border-t border-white/5 mt-auto">
         <div className="max-w-[900px] mx-auto px-4 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-navy">Finous</span>
-              <span className="text-[10px] text-text-muted">by Nidhiverse Pvt Ltd</span>
+              <span className="text-xs font-semibold text-white/70">Finous</span>
+              <span className="text-[10px] text-white/30">by Nidhiverse Pvt Ltd</span>
             </div>
-            <a href="mailto:founder@finous.site" className="text-[10px] text-text-muted hover:text-navy transition-colors">
+            <a href="mailto:founder@finous.site" className="text-[10px] text-white/30 hover:text-white/50 transition-colors">
               founder@finous.site
             </a>
           </div>
