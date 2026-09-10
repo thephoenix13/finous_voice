@@ -22,20 +22,6 @@ import {
   WifiOff,
 } from 'lucide-react';
 
-// Suggested questions for demo mode
-const SUGGESTED_QUESTIONS = [
-  'What is compound interest?',
-  'Explain tax brackets',
-  'What is an ETF?',
-  'How does a mortgage work?',
-  'Difference between deduction and credit?',
-  'What is the 50-30-20 rule?',
-  'What is a credit score?',
-  'How does diversification work?',
-  'What is dollar-cost averaging?',
-  'Explain capital gains tax',
-];
-
 // ═══════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT & COMPLIANCE
 // ═══════════════════════════════════════════════════════════════════
@@ -118,6 +104,23 @@ const AGENT_CONFIG: any = {
 };
 
 // ═══════════════════════════════════════════════════════════════════
+// SUGGESTED QUESTIONS
+// ═══════════════════════════════════════════════════════════════════
+
+const SUGGESTED_QUESTIONS = [
+  'What is compound interest?',
+  'Explain tax brackets',
+  'What is an ETF?',
+  'How does a mortgage work?',
+  'Difference between deduction and credit?',
+  'What is the 50-30-20 rule?',
+  'What is a credit score?',
+  'How does diversification work?',
+  'What is dollar-cost averaging?',
+  'Explain capital gains tax',
+];
+
+// ═══════════════════════════════════════════════════════════════════
 // VOICE AGENT INNER COMPONENT (uses hooks inside provider)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -131,28 +134,14 @@ function VoiceAgentInner() {
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
-  const [volumeLevel, setVolumeLevel] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const animFrameRef = useRef<number>(0);
 
   // Auto-scroll transcript
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation]);
-
-  // Volume meter animation
-  useEffect(() => {
-    if (hasStarted && micActive) {
-      const animate = () => {
-        // We'll use a simple visual pulse instead of actual volume
-        setVolumeLevel(Math.random() * 0.5 + 0.3);
-        animFrameRef.current = requestAnimationFrame(animate);
-      };
-      animFrameRef.current = requestAnimationFrame(animate);
-      return () => cancelAnimationFrame(animFrameRef.current);
-    }
-  }, [hasStarted, micActive]);
 
   // Determine UI state
   const getAgentState = (): 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'error' => {
@@ -169,6 +158,8 @@ function VoiceAgentInner() {
 
   // Handle mic button tap
   const handleMicTap = useCallback(async () => {
+    setError(null);
+    
     if (!hasStarted) {
       // First tap — start the session
       try {
@@ -176,14 +167,15 @@ function VoiceAgentInner() {
         setHasStarted(true);
       } catch (err) {
         console.error('Failed to start agent:', err);
-        // Show helpful error message
-        alert(
-          'Unable to connect to the voice agent. Please ensure:\n\n' +
-          '1. DEEPGRAM_API_KEY is set in Vercel environment variables\n' +
-          '2. OpenAI API key is configured in your Deepgram Console\n' +
-          '3. You have granted microphone permission\n\n' +
-          'Error: ' + (err instanceof Error ? err.message : 'Unknown error')
-        );
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        
+        if (errorMessage.includes('token') || errorMessage.includes('Failed to get token')) {
+          setError('Unable to connect. Please ensure DEEPGRAM_API_KEY is set in Vercel environment variables.');
+        } else if (errorMessage.includes('microphone') || errorMessage.includes('permission')) {
+          setError('Microphone access denied. Please grant microphone permission and try again.');
+        } else {
+          setError(`Connection failed: ${errorMessage}`);
+        }
       }
     } else if (isConnected) {
       // Already connected — toggle mute
@@ -194,7 +186,7 @@ function VoiceAgentInner() {
         await start();
       } catch (err) {
         console.error('Failed to reconnect:', err);
-        alert('Failed to reconnect. Please check your connection and try again.');
+        setError('Failed to reconnect. Please check your connection and try again.');
       }
     }
   }, [hasStarted, isConnected, micMuted, start, setMicMuted]);
@@ -215,10 +207,15 @@ function VoiceAgentInner() {
   const handleSuggestedClick = useCallback(
     async (question: string) => {
       if (!hasStarted) {
-        await start();
-        setHasStarted(true);
-        // Small delay to let connection establish
-        setTimeout(() => sendUserMessage(question), 500);
+        try {
+          await start();
+          setHasStarted(true);
+          // Small delay to let connection establish
+          setTimeout(() => sendUserMessage(question), 500);
+        } catch (err) {
+          console.error('Failed to start agent:', err);
+          setError('Unable to connect. Please ensure API keys are configured.');
+        }
       } else if (isConnected) {
         sendUserMessage(question);
       }
@@ -368,6 +365,13 @@ function VoiceAgentInner() {
               )}
             </p>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mt-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl max-w-md text-center">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
 
           {/* Control buttons */}
           {hasStarted && isConnected && (
@@ -553,358 +557,10 @@ function VoiceAgentInner() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// DEMO MODE COMPONENT (when API keys not configured)
-// ═══════════════════════════════════════════════════════════════════
-
-function DemoModeApp() {
-  const [agentState, setAgentState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
-  const [messages, setMessages] = useState<Array<{ id: string; role: 'user' | 'agent'; content: string }>>([]);
-  const [textInput, setTextInput] = useState('');
-  const [showTextInput, setShowTextInput] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(true);
-  
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll transcript
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Demo responses
-  const getDemoResponse = (question: string): string => {
-    const lower = question.toLowerCase();
-    
-    if (lower.includes('compound interest')) {
-      return "Compound interest is when your money earns interest, and then that interest earns interest too. It's like a snowball effect where your money grows faster over time because you earn returns on both your original investment and the accumulated earnings. This is general information, not financial or tax advice.";
-    } else if (lower.includes('tax bracket')) {
-      return "Tax brackets are ranges of income that are taxed at different rates. As your income increases, different portions may be taxed at higher rates. For example, you might pay 10% on the first $10,000 of income and 12% on income above that threshold. This is general information, not financial or tax advice.";
-    } else if (lower.includes('etf')) {
-      return "An ETF, or Exchange-Traded Fund, is a basket of investments like stocks or bonds that trades on a stock exchange. It gives you instant diversification because you own a small piece of many assets at once. ETFs typically have lower fees than actively managed funds. This is general information, not financial or tax advice.";
-    } else if (lower.includes('mortgage')) {
-      return "A mortgage is a loan specifically for buying property. The property itself serves as collateral. You make regular payments that cover both the principal and interest. Mortgages typically run 15 to 30 years. This is general information, not financial or tax advice.";
-    } else if (lower.includes('deduction') && lower.includes('credit')) {
-      return "A tax deduction reduces the amount of income that's taxed, while a tax credit directly reduces the tax you owe dollar-for-dollar. For example, a $1,000 deduction might save you $220 in taxes if you're in the 22% bracket, but a $1,000 credit saves you the full $1,000. This is general information, not financial or tax advice.";
-    } else if (lower.includes('50-30-20')) {
-      return "The 50-30-20 rule is a budgeting framework. You allocate 50% of after-tax income to needs like rent and groceries, 30% to wants like dining out and entertainment, and 20% to savings and debt repayment. This is general information, not financial or tax advice.";
-    } else if (lower.includes('credit score')) {
-      return "A credit score is a number, typically between 300 and 850, that represents how reliably you've handled borrowed money in the past. Lenders use it to decide whether to lend to you and at what interest rate. This is general information, not financial or tax advice.";
-    } else if (lower.includes('diversification')) {
-      return "Diversification means spreading your investments across different types of assets to reduce risk. The idea is that when one area underperforms, others may do better. It's often described as 'not putting all your eggs in one basket.' This is general information, not financial or tax advice.";
-    } else if (lower.includes('dollar-cost')) {
-      return "Dollar-cost averaging means investing a fixed amount of money at regular intervals, regardless of the price. When prices are low, your fixed amount buys more shares. When prices are high, it buys fewer. This is general information, not financial or tax advice.";
-    } else if (lower.includes('capital gains')) {
-      return "Capital gains tax is a tax on the profit you make when you sell an asset for more than you paid for it. Many countries distinguish between short-term and long-term gains, with long-term gains typically taxed at a lower rate. This is general information, not financial or tax advice.";
-    } else if (lower.includes('recommend') || lower.includes('should i')) {
-      return "I can explain how this works, but I can't recommend what you should do. For that, please consult a qualified financial or tax advisor. This is general information, not financial or tax advice.";
-    } else {
-      return "That's a great question! I'm here to help explain financial concepts in plain English. Could you try asking about a specific topic like compound interest, tax brackets, ETFs, or budgeting? This is general information, not financial or tax advice.";
-    }
-  };
-
-  const handleQuestion = async (question: string) => {
-    if (!question.trim()) return;
-    
-    // Add user message
-    setMessages(prev => [...prev, {
-      id: Date.now().toString(),
-      role: 'user',
-      content: question,
-    }]);
-    
-    // Simulate thinking
-    setAgentState('thinking');
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 500));
-    
-    // Get response
-    const response = getDemoResponse(question);
-    
-    // Simulate speaking
-    setAgentState('speaking');
-    await new Promise(resolve => setTimeout(resolve, Math.min(response.length * 30, 3000)));
-    
-    // Add agent message
-    setMessages(prev => [...prev, {
-      id: (Date.now() + 1).toString(),
-      role: 'agent',
-      content: response,
-    }]);
-    
-    setAgentState('idle');
-  };
-
-  const handleMicTap = () => {
-    if (agentState === 'idle') {
-      setAgentState('listening');
-      // Simulate listening for 3 seconds then ask a demo question
-      setTimeout(() => {
-        const demoQuestions = [
-          'What is compound interest?',
-          'Explain tax brackets',
-          'What is an ETF?',
-          'How does a mortgage work?',
-        ];
-        const randomQuestion = demoQuestions[Math.floor(Math.random() * demoQuestions.length)];
-        handleQuestion(randomQuestion);
-      }, 3000);
-    }
-  };
-
-  const handleTextSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (textInput.trim()) {
-      handleQuestion(textInput);
-      setTextInput('');
-    }
-  };
-
-  const handleSuggestedClick = (question: string) => {
-    handleQuestion(question);
-  };
-
-  return (
-    <div className="min-h-screen flex flex-col bg-bg">
-      {/* Header */}
-      <header className="sticky top-0 z-50 header-blur bg-white/80 border-b border-gray-100">
-        <div className="max-w-[900px] mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <a href="https://www.finous.site/" className="flex items-center gap-1.5 text-text-muted hover:text-navy transition-colors text-sm">
-              <ArrowLeft size={16} />
-              <span className="hidden sm:inline">Back</span>
-            </a>
-            <div className="h-4 w-px bg-gray-200" />
-            <span className="text-lg font-semibold text-navy tracking-tight">Finous</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">
-              Demo Mode
-            </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-navy/5 text-navy text-xs font-medium">
-              <Volume2 size={12} />
-              Voice · Info Only
-            </span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col max-w-[900px] mx-auto w-full px-4">
-        {/* Hero */}
-        <section className="pt-6 pb-4 sm:pt-10 sm:pb-6 text-center">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-navy leading-tight">
-            Ask Finous anything about money.
-          </h1>
-          <p className="mt-2 sm:mt-3 text-text-muted text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
-            Understand personal finance and tax rules in plain English.
-            <br className="hidden sm:block" /> Information, never advice.
-          </p>
-          <p className="mt-3 text-xs text-amber-700 bg-amber-50 inline-block px-3 py-1.5 rounded-full">
-            ⚠️ Demo mode — Voice not active. Configure API keys for live voice.
-          </p>
-        </section>
-
-        {/* Voice Interface */}
-        <section className="flex flex-col items-center py-4 sm:py-6 relative">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] rounded-full bg-gradient-to-br from-gold/[0.04] to-transparent pointer-events-none" />
-
-          <div className="relative">
-            {(agentState === 'listening' || agentState === 'speaking') && (
-              <>
-                <div className="absolute inset-0 rounded-full bg-gold/20 animate-pulse-ring" style={{ margin: '-12px' }} />
-                <div className="absolute inset-0 rounded-full bg-gold/10 animate-pulse-ring" style={{ margin: '-24px', animationDelay: '0.5s' }} />
-              </>
-            )}
-
-            <button
-              onClick={handleMicTap}
-              disabled={agentState !== 'idle'}
-              className={`
-                relative z-10 w-[140px] h-[140px] sm:w-[180px] sm:h-[180px] rounded-full
-                flex items-center justify-center
-                transition-all duration-300 ease-out
-                focus:outline-none focus:ring-4 focus:ring-gold/30
-                ${agentState === 'idle' ? 'bg-gradient-to-br from-gold to-gold-dark hover:scale-105 mic-glow cursor-pointer' : ''}
-                ${agentState === 'listening' ? 'bg-gradient-to-br from-gold to-gold-dark mic-glow-active animate-pulse-dot' : ''}
-                ${agentState === 'thinking' ? 'bg-navy cursor-wait' : ''}
-                ${agentState === 'speaking' ? 'bg-gradient-to-br from-navy to-navy-light' : ''}
-              `}
-            >
-              {agentState === 'idle' && <Mic size={48} className="text-white sm:w-14 sm:h-14" />}
-              {agentState === 'listening' && (
-                <div className="flex items-center gap-1.5">
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <div key={i} className="w-1.5 bg-white rounded-full animate-waveform" style={{ animationDelay: `${i * 0.15}s`, height: '8px' }} />
-                  ))}
-                </div>
-              )}
-              {agentState === 'thinking' && <Loader2 size={40} className="text-white animate-spin-slow" />}
-              {agentState === 'speaking' && (
-                <div className="flex items-center gap-1.5">
-                  {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="w-1 bg-gold rounded-full animate-waveform" style={{ animationDelay: `${i * 0.1}s`, height: '8px' }} />
-                  ))}
-                </div>
-              )}
-            </button>
-          </div>
-
-          <div className="mt-4 text-center">
-            <p className="text-sm font-medium text-text-muted">
-              {agentState === 'idle' && 'Tap to speak (demo)'}
-              {agentState === 'listening' && 'Listening...'}
-              {agentState === 'thinking' && 'Thinking...'}
-              {agentState === 'speaking' && 'Finous is speaking...'}
-            </p>
-            <p className="text-xs text-text-muted/60 mt-1">Demo mode — No real voice</p>
-          </div>
-        </section>
-
-        {/* Text Input */}
-        <section className="pb-4">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <button onClick={() => setShowTextInput(!showTextInput)} className="text-xs text-text-muted hover:text-navy transition-colors flex items-center gap-1">
-              <MessageCircle size={12} />
-              {showTextInput ? 'Hide text input' : 'Or type your question'}
-            </button>
-          </div>
-
-          {showTextInput && (
-            <form onSubmit={handleTextSubmit} className="animate-fade-in max-w-lg mx-auto">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  placeholder="Type a question about finance or tax..."
-                  className="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold placeholder:text-text-muted/50 transition-all"
-                />
-                <button type="submit" disabled={!textInput.trim()} className="px-4 py-3 rounded-xl bg-navy text-white text-sm font-medium hover:bg-navy-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                  <Send size={16} />
-                </button>
-              </div>
-            </form>
-          )}
-        </section>
-
-        {/* Suggested Questions */}
-        <section className="pb-4">
-          <div className="chips-scroll flex gap-2 overflow-x-auto px-1 pb-2">
-            {SUGGESTED_QUESTIONS.map((q, i) => (
-              <button key={i} onClick={() => handleSuggestedClick(q)} className="shrink-0 px-4 py-2 rounded-full border border-gold/30 bg-white text-sm text-navy hover:bg-gold/5 hover:border-gold/50 transition-all whitespace-nowrap">
-                {q}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* Transcript */}
-        {messages.length > 0 && (
-          <section className="flex-1 pb-4">
-            <div className="transcript-scroll overflow-y-auto max-h-[40vh] sm:max-h-[50vh] space-y-3 px-1">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`animate-fade-in flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-gray-100 text-text-dark rounded-br-md' : 'bg-white border border-gray-100 shadow-sm text-text-dark rounded-bl-md border-l-[3px] border-l-gold'}`}>
-                    <p>{msg.content}</p>
-                  </div>
-                </div>
-              ))}
-              <div ref={transcriptEndRef} />
-            </div>
-          </section>
-        )}
-
-        {/* Empty State */}
-        {messages.length === 0 && (
-          <section className="flex-1 flex flex-col items-center justify-center py-6 text-center animate-slide-up">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-navy/5 to-gold/5 flex items-center justify-center mb-4">
-              <Info size={24} className="text-navy/40" />
-            </div>
-            <p className="text-sm text-text-muted max-w-xs leading-relaxed">
-              Tap the microphone or type a question to see how Finous responds.
-            </p>
-            <div className="grid grid-cols-2 gap-2 mt-5 w-full max-w-sm px-2">
-              {['💰 Compound Interest', '📊 Tax Brackets', '🏦 ETFs', '🏠 Mortgages'].map((topic, i) => (
-                <button key={i} onClick={() => handleSuggestedClick(SUGGESTED_QUESTIONS[i])} className="px-3 py-2.5 rounded-xl bg-white border border-gray-100 shadow-sm text-xs text-navy font-medium hover:border-gold/30 hover:shadow-md transition-all text-left">
-                  {topic}
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Disclaimer */}
-        <section className="py-4">
-          <div className="bg-amber-50 border border-amber-200/50 rounded-xl px-4 py-3 flex items-start gap-2.5">
-            <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-800 leading-relaxed">
-              <strong>Disclaimer:</strong> Finous Voice provides general information only. It does not give financial, tax, or investment advice. Consult a qualified advisor for personalized guidance.
-            </p>
-          </div>
-        </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="safe-bottom border-t border-gray-100 bg-white/60 mt-auto">
-        <div className="max-w-[900px] mx-auto px-4 py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-navy">Finous</span>
-              <span className="text-xs text-text-muted">by Nidhiverse Pvt Ltd</span>
-            </div>
-            <div className="flex items-center gap-4 text-xs text-text-muted">
-              <a href="mailto:founder@finous.site" className="hover:text-navy transition-colors">founder@finous.site</a>
-              <span className="hidden sm:inline">·</span>
-              <span className="hidden sm:inline">Confidential — For informational purposes only</span>
-            </div>
-          </div>
-          <p className="text-center text-[10px] text-text-muted/50 mt-3 sm:hidden">Confidential — For informational purposes only</p>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// MAIN APP - Detects if API is available
+// MAIN APP WITH PROVIDER
 // ═══════════════════════════════════════════════════════════════════
 
 export default function App() {
-  const [useDemoMode, setUseDemoMode] = useState<boolean | null>(null);
-
-  // Check if API is available on mount
-  useEffect(() => {
-    const checkApi = async () => {
-      try {
-        const res = await fetch('/api/token');
-        if (res.ok) {
-          setUseDemoMode(false);
-        } else {
-          setUseDemoMode(true);
-        }
-      } catch {
-        setUseDemoMode(true);
-      }
-    };
-    checkApi();
-  }, []);
-
-  // Show loading while checking
-  if (useDemoMode === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-bg">
-        <div className="text-center">
-          <Loader2 size={40} className="text-gold animate-spin-slow mx-auto mb-4" />
-          <p className="text-sm text-text-muted">Loading Finous Voice...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Use demo mode if API not available
-  if (useDemoMode) {
-    return <DemoModeApp />;
-  }
-
-  // Use real Deepgram agent
   return (
     <AgentProvider
       config={AGENT_CONFIG}
